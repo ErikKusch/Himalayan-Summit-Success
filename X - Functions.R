@@ -16,6 +16,7 @@ FUN.RawDown <- function(Variable,
 												API_User = API_User, # API User Number
 												API_Key = API_Key # API User Key
 												){
+	in_parallel <- parallel
 	if(parallel == 1){parallel <- NULL} # no parallelisation
 	if(!is.null(parallel)){ # parallelisation
 		message("Registering cluster for parallel processing")
@@ -37,20 +38,21 @@ FUN.RawDown <- function(Variable,
 										 cl = parallel,
 										 function(Year_Iter){
 										 	
-										 	print(Year_Iter)
+										 	sink(file.path(Dir, paste0(Year_Iter, ".txt")))
+										 	print("Working on it")
+										 	sink()
 										 	
 										 	if(file.exists(file.path(Dir, paste0(paste(Variable, Year_Iter, sep="-"), ".nc")))){
 										 		message("Already downloaded")
 										 		Var_Year_ras <- stack(file.path(Dir, paste0(paste(Variable, Year_Iter, sep="-"), ".nc")))
 										 	}else{
-										 		
-										 		StartYear <- paste0(Year_Iter, "-01-01")
-										 		if(Year_Iter == 1950){StartYear <- paste0(Year_Iter, "-02-01")}
-										 		
+										 		Y_diff <- (Year_Iter - Years[1])
+										 		Sys.sleep(Year_Iter-Years[1] - in_parallel*floor(Y_diff/in_parallel))
+
 										 		Var_Year_ras <- download_ERA(
 										 			Variable = Variable, # target variable
 										 			DataSet = "era5-land", # data set
-										 			DateStart = StartYear, # starting date of time-window
+										 			DateStart = paste0(Year_Iter, "-01-01"), # starting date of time-window
 										 			DateStop = paste0(Year_Iter, "-12-31"), # final date of time-window
 										 			TResolution = "hour",
 										 			TStep = 1,
@@ -62,6 +64,7 @@ FUN.RawDown <- function(Variable,
 										 			SingularDL = TRUE
 										 		)	
 										 	}
+										 	unlink(file.path(Dir, paste0(Year_Iter, ".txt")))
 										 })
 	stack(Var_ls)
 }
