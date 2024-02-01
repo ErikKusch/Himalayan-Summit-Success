@@ -47,3 +47,15 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Folders with Data
+Data/*
+Exports/*
+Logo/*
+
+# DS Store for mac coding
+**/.DS_Store
+Icon*
+
+# API credential
+X - PersonalSettings.R
