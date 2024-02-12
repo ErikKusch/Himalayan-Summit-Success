@@ -110,20 +110,61 @@ Data_ls <- lapply(rev(Variables_vec), FUN = function(Var_Iter){
   Var_data
 })
 
-# # COVARIATES ==============================================================
-# Covs_ls <- download_DEM(Train_ras = Nepa_Temperature_2022,
-#                         Target_res = .05,
-#                         Shape = Nepal_shp,
-#                         Dir = Dir.Covariates,
-#                         Keep_Temporary = TRUE)
-# 
-# # KRIGING =================================================================
-# Nepa_Temperature_2022_Krig <- krigR(Data = Nepa_Temperature_2022,
-#                                     Covariates_coarse = Covs_ls[[1]],
-#                                     Covariates_fine = Covs_ls[[2]],
-#                                     Keep_Temporary = TRUE,
-#                                     Cores = parallel::detectCores(),
-#                                     nmax = 40,
-#                                     FileName = "Nepa_Temperature_2022_Krig",
-#                                     Dir = Dir.Exports
-# )
+# COVARIATES ==============================================================
+# Data <- mean(rast(file.path(Dir.Data, list.files(Dir.Data, pattern = ".nc")[1])))
+Data <- mean(rast(list.files(file.path(Dir.Data, list.files(Dir.Data, pattern = "temperature")[1]), pattern = ".nc", full.names = TRUE)[1]))
+
+COP_DEM <- rast(file.path(Dir.Covariates, "COP30.tif"))
+COP_DEM <- terra::aggregate(COP_DEM, fact = 3) # have to upscale to circumvent "coordinate intervals are not constant" when creating spatialpixels data frame in krigR
+
+Peaks_df <- read.csv(file.path(Dir.Data, "selected_peaks_coordinates_counts.csv"))
+colnames(Peaks_df)[colnames(Peaks_df) %in% c("LON", "LAT")] <- c("Lon", "Lat")
+Peaks_sf <- st_as_sf(Peaks_df, coords = c("Lon", "Lat"))
+Peaks_buffer <- st_buffer(Peaks_sf[,"ID"], dist = 0.4, endCapStyle = "SQUARE")
+st_crs(Peaks_buffer) <- terra::crs(COP_DEM)
+st_crs(Peaks_sf) <- terra::crs(COP_DEM)
+
+Data <- crop(Data, Peaks_buffer)
+COP_DEM <- crop(COP_DEM, Peaks_buffer)
+COP_coarse <- resample(COP_DEM, Data)
+COP_fine <- mask(COP_DEM, Peaks_buffer)
+
+Peaks_buffer <- st_union(Peaks_buffer)
+
+# KRIGING =================================================================
+COP_krig <- krigR(Data = raster(Data),
+									Covariates_coarse = raster(COP_coarse),
+									Covariates_fine = raster(COP_fine),
+									Keep_Temporary = TRUE,
+									Cores = parallel::detectCores(),
+									KrigingEquation = "mean ~ COP30",
+									nmax = 40,
+									FileName = "COP_krig",
+									Dir = Dir.Exports
+)
+
+COP_kriged <- rast(file.path(Dir.Exports, "COP_krig.nc"))
+
+library(ggplot2)
+library(ggrepel)
+library(tidyterra)
+
+ggplot() +
+	geom_spatraster(data = Data, aes(fill = mean)) +
+	geom_spatraster(data = COP_kriged, aes(fill = COP_krig)) +
+	geom_sf(data = Peaks_buffer, color = "black", fill = "transparent") + 
+	geom_sf(data = Peaks_sf, shape = 2) + 
+	ggrepel::geom_text_repel(data = Peaks_df, 
+													 aes(x = Lon, y = Lat, label = PKNAME),
+													 max.overlaps = 20) + 
+	scale_fill_viridis_c(na.value = "transparent", name = "[K]") + 
+	labs(title = "Temperature of Snow Layer") + 
+	theme_bw() + 
+	theme(legend.position = "bottom", legend.key.width = unit(2.5, "cm"))
+	
+
+
+
+
+
+
