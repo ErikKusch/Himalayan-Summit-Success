@@ -156,7 +156,7 @@ ggplot() +
 	geom_sf(data = Peaks_sf, shape = 2) + 
 	ggrepel::geom_text_repel(data = Peaks_df, 
 													 aes(x = Lon, y = Lat, label = PKNAME),
-													 max.overlaps = 20) + 
+													 max.overlaps = 30) + 
 	scale_fill_viridis_c(na.value = "transparent", name = "[K]") + 
 	labs(title = "Temperature of Snow Layer") + 
 	theme_bw() + 
