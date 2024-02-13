@@ -87,6 +87,7 @@ FUN.RawDown <- function(Variable,
                      }) # year pbapply
   
   names(Var_ls) <- Years
+  if(sum(unlist(lapply(Var_ls, is.null))) > 0){stop("Some downloads failed, but should be registered on CDS: https://cds.climate.copernicus.eu/cdsapp#!/yourrequests")}
   
   Processed_ls <- pblapply(Var_ls, 
                            cl = ifelse(in_parallel > 4, 4, in_parallel),
