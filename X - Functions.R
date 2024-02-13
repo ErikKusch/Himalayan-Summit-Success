@@ -49,25 +49,43 @@ FUN.RawDown <- function(Variable,
                        }else{
                          Y_diff <- (Year_Iter - Years[1])
                          Sys.sleep(Year_Iter-Years[1] - in_parallel*floor(Y_diff/in_parallel))
-                         
-                         Var_Year_ras <- download_ERA(
-                           Variable = Variable, # target variable
-                           DataSet = "era5-land", # data set
-                           DateStart = paste0(Year_Iter, "-01-01"), # starting date of time-window
-                           DateStop = paste0(Year_Iter, "-12-31"), # final date of time-window
-                           TResolution = "hour",
-                           TStep = 1,
-                           Extent = Extent, # the spatial preference
-                           Dir = Dir, # where to store data
-                           FileName = paste(Variable, Year_Iter, sep="-"), # a name downloaded file
-                           API_User = API_User, # API User Number
-                           API_Key = API_Key, # API User Key
-                           SingularDL = TRUE
-                         )	
-                       }
+                         ## error message handling to keep reiterating downloads until login has been validated
+                         regex.escape <- function(string) {   gsub("([][{}()+*^${|\\\\?])", "\\\\\\1", string) }
+                         errmsg <- "Default"
+                         ## loop for as long as error message is no actual error (first iteration) or as long as it relates to validation errors on login
+                         while(grepl(regex.escape(errmsg), pattern = "validate") | errmsg == "Default"){
+                         	try(invisible(capture.output(Var_Year_ras <- download_ERA(
+                         		Variable = Variable, # target variable
+                         		DataSet = "era5-land", # data set
+                         		DateStart = paste0(Year_Iter, "-01-01"), # starting date of time-window
+                         		DateStop = paste0(Year_Iter, "-12-31"), # final date of time-window
+                         		TResolution = "hour",
+                         		TStep = 1,
+                         		Extent = Extent, # the spatial preference
+                         		Dir = Dir, # where to store data
+                         		FileName = paste(Variable, Year_Iter, sep="-"), # a name downloaded file
+                         		API_User = API_User, # API User Number
+                         		API_Key = API_Key, # API User Key
+                         		SingularDL = TRUE,
+                         		TryDown = 1
+                         	), silent = TRUE)))
+                         	
+                         	if(!exists("Var_Year_ras")){ # if download fails
+                         		message(paste0('Download failing for ', 
+                         									 Year_Iter, '. Error: ', 
+                         									 geterrmessage()
+                         		)
+                         		)
+                         		errmsg <- geterrmessage()
+                         	}
+                         } # while loop
+                       } # else statement on file check
                        unlink(file.path(Dir, paste0(Year_Iter, ".txt")))
+                       if(exists("Var_Year_ras")){ # if download doesn't fail
                        Var_Year_ras
-                     })
+                       }
+                     }) # year pbapply
+  
   names(Var_ls) <- Years
   
   Processed_ls <- pblapply(Var_ls, 
