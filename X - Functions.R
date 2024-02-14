@@ -51,9 +51,9 @@ FUN.RawDown <- function(Variable,
                          Sys.sleep(Year_Iter-Years[1] - in_parallel*floor(Y_diff/in_parallel))
                          ## error message handling to keep reiterating downloads until login has been validated
                          regex.escape <- function(string) {   gsub("([][{}()+*^${|\\\\?])", "\\\\\\1", string) }
-                         errmsg <- "Default"
+                         errmsg <- "Working On It"
                          ## loop for as long as error message is no actual error (first iteration) or as long as it relates to validation errors on login
-                         while(grepl(regex.escape(errmsg), pattern = "validate") | errmsg == "Default"){
+                         while(grepl(regex.escape(errmsg), pattern = "validate") | errmsg == "Working On It"){
                          	try(invisible(capture.output(Var_Year_ras <- download_ERA(
                          		Variable = Variable, # target variable
                          		DataSet = "era5-land", # data set
@@ -77,6 +77,8 @@ FUN.RawDown <- function(Variable,
                          		)
                          		)
                          		errmsg <- geterrmessage()
+                         	}else{
+                         		errmsg <- "No Error"
                          	}
                          } # while loop
                        } # else statement on file check
