@@ -490,13 +490,13 @@ sum(ExpedCheck)
 KrigCheck <- c()
 for(Time_i in 1:nlyr(Data)){
 	Time_i <- terra::time(Data)[Time_i]
-	# print(Time_i)
+	print(Time_i)
 	KrigCheck <- c(KrigCheck, 
 								 sum(rowSums((cbind(Time_i >= KrigingTimeWindows$Start, Time_i <= KrigingTimeWindows$Stop)))>1)
 	)
 }
 KrigCheck <- as.logical(KrigCheck)
-sum(KrigCheck > 1)/length(KrigCheck)
+sum(KrigCheck)/length(KrigCheck)
 
 
 stop("DoubleCheck the above with Christian at a new date")
