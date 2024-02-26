@@ -28,7 +28,11 @@ package_vec <- c(
   "rnaturalearthdata", # for high-resolution shapefiles
   "mapview", # for generating mapview outputs
   "sf", # for more efficient handling of sp data
-  "terra" # for more efficient handling of raster data
+  "terra", # for more efficient handling of raster data
+  "ggplot2", # ggploting engine
+  "ggrepel", # repelled labels
+  "tidyterra", # ggploting of terra files
+  "dplyr" # for reshaping time series extractions
 )
 sapply(package_vec, install.load.package)
 
@@ -78,17 +82,13 @@ Nepal_shp <- as(Nepal_shp, "Spatial")
 #' proj4string(summits_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 
 ## ERA5-Land --------------------------------------------------------------
-Variables_vec <- c("10m_u_component_of_wind", "10m_v_component_of_wind", 
-                   "2m_temperature", "skin_temperature", 
+Variables_vec <- c("2m_temperature", "skin_temperature", 
+                   "10m_u_component_of_wind", "10m_v_component_of_wind", 
                    "snow_cover", "snow_density", "snow_depth", "snow_depth_water_equivalent",
                    "snow_evaporation", "snowfall", "snowmelt", "temperature_of_snow_layer")
 Years_vec <- 1951:2021
 
-#substrRight <- function(x, n){
-#	substr(x, nchar(x)-n+1, nchar(x))
-#}
-
-Data_ls <- lapply(rev(Variables_vec), FUN = function(Var_Iter){
+Data_ls <- lapply(Variables_vec, FUN = function(Var_Iter){
   message(paste("###", Var_Iter))
   
   if(file.exists(file.path(Dir.Data, paste0(Var_Iter, ".nc")))){
@@ -102,7 +102,7 @@ Data_ls <- lapply(rev(Variables_vec), FUN = function(Var_Iter){
                             Extent = extent(Nepal_shp) + c(-1, 1, -1, 1), 
                             Years = Years_vec, 
                             Dir = Dir.Var, 
-                            parallel = 12,
+                            parallel = parallel::detectCores(),
                             API_User = API_User, # API User Number
                             API_Key = API_Key # API User Key
     )
@@ -111,11 +111,10 @@ Data_ls <- lapply(rev(Variables_vec), FUN = function(Var_Iter){
 })
 
 # COVARIATES ==============================================================
-# Data <- mean(rast(file.path(Dir.Data, list.files(Dir.Data, pattern = ".nc")[1])))
-Data <- mean(rast(list.files(file.path(Dir.Data, list.files(Dir.Data, pattern = "temperature")[1]), pattern = ".nc", full.names = TRUE)[1]))
+Data <- mean(rast(list.files(Dir.Data, pattern = ".nc", full.names = TRUE)[2]))
 
 COP_DEM <- rast(file.path(Dir.Covariates, "COP30.tif"))
-COP_DEM <- terra::aggregate(COP_DEM, fact = 3) # have to upscale to circumvent "coordinate intervals are not constant" when creating spatialpixels data frame in krigR
+COP_DEM <- terra::aggregate(COP_DEM, fact = 2) # have to upscale to circumvent "coordinate intervals are not constant" when creating spatialpixels data frame in krigR
 
 Peaks_df <- read.csv(file.path(Dir.Data, "selected_peaks_coordinates_counts.csv"))
 colnames(Peaks_df)[colnames(Peaks_df) %in% c("LON", "LAT")] <- c("Lon", "Lat")
@@ -143,13 +142,12 @@ COP_krig <- krigR(Data = raster(Data),
 									Dir = Dir.Exports
 )
 
+# PLOTTING ================================================================
+## Maps -----
 COP_kriged <- rast(file.path(Dir.Exports, "COP_krig.nc"))
+# Data <- mean(rast(list.files(Dir.Data, pattern = ".nc", full.names = TRUE)[2]))
 
-library(ggplot2)
-library(ggrepel)
-library(tidyterra)
-
-ggplot() +
+Map_gg <- ggplot() +
 	geom_spatraster(data = Data, aes(fill = mean)) +
 	geom_spatraster(data = COP_kriged, aes(fill = COP_krig)) +
 	geom_sf(data = Peaks_buffer, color = "black", fill = "transparent") + 
@@ -157,11 +155,54 @@ ggplot() +
 	ggrepel::geom_text_repel(data = Peaks_df, 
 													 aes(x = Lon, y = Lat, label = PKNAME),
 													 max.overlaps = 30) + 
-	scale_fill_viridis_c(na.value = "transparent", name = "[K]") + 
+	scale_fill_viridis_c(option = "A", na.value = "transparent", name = "[K]") + 
 	labs(title = "Temperature of Snow Layer") + 
 	theme_bw() + 
 	theme(legend.position = "bottom", legend.key.width = unit(2.5, "cm"))
-	
+Map_gg
+
+ggsave(Map_gg, filename = file.path(Dir.Exports, "PLOT_Maps.png"), 
+																		width = 16, height = 8)
+
+## Time-Series ----
+Peaks <- c("Saipal", "Everest", "Bhrikuti", "Jannu", "Ganchenpo") # just a small selection
+Data <- rast(list.files(Dir.Data, pattern = ".nc", full.names = TRUE)[2])
+Peaks_TimeSeries <- terra::extract(Data, Peaks_sf[Peaks_sf$PKNAME %in% Peaks, ])
+Peaks_TimeSeries <- Peaks_TimeSeries[ , -1] # remove ID column
+rownames(Peaks_TimeSeries) <- Peaks_sf[Peaks_sf$PKNAME %in% Peaks, ]$PKNAME
+colnames(Peaks_TimeSeries) <- terra::time(Data)
+Peaks_TimeSeries$ID <- rownames(Peaks_TimeSeries)
+Peaks_TimeSeries <- Peaks_TimeSeries %>% 
+	pivot_longer(cols = matches("-"),
+							 names_to = "Date",
+							 values_to = "value")
+Peaks_TimeSeries$Month <- substr(Peaks_TimeSeries$Date, start = 1, stop = 7)
+Peaks_TimeSeries$Year <- substr(Peaks_TimeSeries$Date, start = 1, stop = 4)
+Plot_TimeSeries <- Peaks_TimeSeries %>%
+	group_by(Year, ID) %>%
+	dplyr::summarise(mean = mean(value), sd = sd(value))
+
+SummitYear_ts <- ggplot(Plot_TimeSeries, 
+												aes(x = Year, y = mean, 
+														col = ID, group = ID
+														)) +
+	geom_point() +
+	stat_smooth(method = "lm") +
+	scale_color_viridis_d(name = "Summit") + 
+	theme_bw() + labs(y = "Temperature of Snow Layer [K]") + 
+	theme(axis.text.x = element_text(angle = -45, hjust = -0.2))
+SummitYear_ts
+
+ggsave(SummitYear_ts, filename = file.path(Dir.Exports, "PLOT_TimeSeries.png"), 
+			 width = 16, height = 9)
+
+
+
+
+
+
+
+
 
 
 
