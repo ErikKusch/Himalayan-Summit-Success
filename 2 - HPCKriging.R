@@ -479,13 +479,21 @@ KrigingTimeWindows <- data.frame(Start = expeditions_df$BCDATE-14,
 																 Stop = ifelse(Compare_df[,1] > Compare_df[,2], Compare_df[,1], Compare_df[,2]))
 KrigingTimeWindows <- na.omit(KrigingTimeWindows) # imputation failes for a few decades because there is only one expedition: 1900 and 1940
 
+ExpedCheck <- c()
+for(Exped_i in 1:nrow(KrigingTimeWindows)){
+	ExpedCheck <- c(ExpedCheck, 
+									KrigingTimeWindows$Start[Exped_i] > min(terra::time(Data)) &
+										KrigingTimeWindows$Stop[Exped_i] < max(terra::time(Data)))
+}
+sum(ExpedCheck)
+
 KrigCheck <- c()
 for(Time_i in 1:nlyr(Data)){
 	Time_i <- terra::time(Data)[Time_i]
 	# print(Time_i)
 	KrigCheck <- c(KrigCheck, 
 								 sum(rowSums((cbind(Time_i >= KrigingTimeWindows$Start, Time_i <= KrigingTimeWindows$Stop)))>1)
-								 )
+	)
 }
 KrigCheck <- as.logical(KrigCheck)
 sum(KrigCheck > 1)/length(KrigCheck)
