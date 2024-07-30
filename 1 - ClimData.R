@@ -6,6 +6,12 @@
 #'  - X - Functions.R
 #' AUTHOR: [Erik Kusch]
 #' ####################################################################### #
+#' Next Steps & Who:
+#' 1. Richard: Identify datasets for validation (target 2m temp and snow-depth water equivalent). If validation is poor, use atmospheric profiles for downscaling. 
+#' 2. Erik & Richard: Produce wind power data from windspeed^3*density (do this calculation at hourly resolution and then make daily averages of that), this should krig well (shadow effects of topography krig well)
+#' 3. Richard: Diagnose wind and temperature at peaks using atmospheric profiles.
+#' Open Questions:
+#' - Snow density and depth downscaling will require considerably more consideration as these are integrated metrics making them difficult to validate
 
 # PREAMBLE ================================================================
 rm(list=ls()) # some may not like it, but it helps my workflow
@@ -82,10 +88,18 @@ Nepal_shp <- as(Nepal_shp, "Spatial")
 #' proj4string(summits_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 
 ## ERA5-Land --------------------------------------------------------------
-Variables_vec <- c("2m_temperature", "skin_temperature", 
-                   "10m_u_component_of_wind", "10m_v_component_of_wind", 
-                   "snow_cover", "snow_density", "snow_depth", "snow_depth_water_equivalent",
-                   "snow_evaporation", "snowfall", "snowmelt", "temperature_of_snow_layer")
+Variables_vec <- c("2m_temperature", 
+									 "skin_temperature", 
+                   "10m_u_component_of_wind", 
+									 "10m_v_component_of_wind", 
+                   "snow_cover", 
+									 "snow_density", 
+									 "snow_depth", 
+									 "snow_depth_water_equivalent",
+                   "snow_evaporation", 
+									 "snowfall", 
+									 "snowmelt", 
+									 "temperature_of_snow_layer")
 Years_vec <- 1951:2021
 
 Data_ls <- lapply(Variables_vec, FUN = function(Var_Iter){
@@ -109,6 +123,7 @@ Data_ls <- lapply(Variables_vec, FUN = function(Var_Iter){
   }
   Var_data
 })
+names(Data_ls) <- Variables_vec
 
 # COVARIATES ==============================================================
 Data <- mean(rast(list.files(Dir.Data, pattern = ".nc", full.names = TRUE)[2]))
