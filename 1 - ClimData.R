@@ -40,7 +40,7 @@ package_vec <- c(
   "tidyterra", # ggploting of terra files
   "dplyr" # for reshaping time series extractions
 )
-sapply(package_vec, install.load.package)
+sapply(package_vec, install.load.package) 
 
 ### NON-CRAN PACKAGES ----
 if("KrigR" %in% rownames(installed.packages()) == FALSE){ # KrigR check
