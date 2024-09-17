@@ -43,6 +43,7 @@ package_vec <- c(
 sapply(package_vec, install.load.package) 
 
 ### NON-CRAN PACKAGES ----
+#' needs rewrite for dev version of KrigR
 if("KrigR" %in% rownames(installed.packages()) == FALSE){ # KrigR check
   Sys.setenv(R_REMOTES_NO_ERRORS_FROM_WARNINGS="true")
   devtools::install_github("ErikKusch/KrigR")
