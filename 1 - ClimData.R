@@ -251,26 +251,26 @@ Data_ls <- lapply(Variables_vec, FUN = function(Var_Iter) {
 names(Data_ls) <- Variables_vec
 
 ## calculate windspeed from u and v component
-if(!file.exists(file.path(Dir.Data, "windspeed_RAW.nc"))){
-	RAW_ls <- lapply(c("10m_u_component_of_wind", "10m_v_component_of_wind"), FUN = function(i){
-		# print(i)
-		rast(
-			list.files(file.path(Dir.Data, i), full.names = TRUE)
-		)
-		# rast(file.path(Dir.Data, paste0(i, "_RAW.nc")))
-	})
-	Indices <- ceiling((1:terra::nlyr(RAW_ls[[1]])) / 2e4)
-	ru_ls <- terra::split(x = RAW_ls[[1]], f = Indices)
-	rv_ls <- terra::split(x = RAW_ls[[2]], f = Indices)
-	ret_ls <- pblapply(1:length(ru_ls), FUN = function(BASE_iter) {
-		ret_rast <- sqrt(abs(ru_ls[[BASE_iter]])^2 + abs(rv_ls[[BASE_iter]])^2) # make m/s total windspeed
-		ret_rast
-	})
-	Windspeed <- do.call(c, ret_ls)
-	rm("RAW_ls", "ru_ls", "rv_ls", "ret_ls")
-	terraOptions(memmax = 10)
-	writeCDF(Windspeed[[1:nlyr(Windspeed)/2]], filename = file.path(Dir.Data, "windspeed_RAW.nc"))
-	terraOptions(memfrac=.9)
+if (!file.exists(file.path(Dir.Data, "windspeed_RAW.nc"))) {
+  RAW_ls <- lapply(c("10m_u_component_of_wind", "10m_v_component_of_wind"), FUN = function(i) {
+    # print(i)
+    # rast(
+    #   list.files(file.path(Dir.Data, i), full.names = TRUE)
+    # )
+    rast(file.path(Dir.Data, paste0(i, "_RAW.nc")))
+  })
+  Indices <- ceiling((1:terra::nlyr(RAW_ls[[1]])) / 2e4)
+  ru_ls <- terra::split(x = RAW_ls[[1]], f = Indices)
+  rv_ls <- terra::split(x = RAW_ls[[2]], f = Indices)
+  ret_ls <- pblapply(1:length(ru_ls), FUN = function(BASE_iter) {
+    ret_rast <- sqrt(abs(ru_ls[[BASE_iter]])^2 + abs(rv_ls[[BASE_iter]])^2) # make m/s total windspeed
+    ret_rast
+  })
+  Windspeed <- do.call(c, ret_ls)
+  rm("RAW_ls", "ru_ls", "rv_ls", "ret_ls")
+  terraOptions(memmax = 10)
+  writeCDF(Windspeed[[1:nlyr(Windspeed) / 2]], filename = file.path(Dir.Data, "windspeed_RAW.nc"))
+  terraOptions(memfrac = .9)
 }
 
 Data_ls$Windspeed <- sqrt(abs(Data_ls$`10m_u_component_of_wind`)^2 + abs(Data_ls$`10m_v_component_of_wind`)^2)
@@ -278,11 +278,11 @@ Data_ls$Windspeed <- sqrt(abs(Data_ls$`10m_u_component_of_wind`)^2 + abs(Data_ls
 VNames_vec <- c(
   "Air Temperature [K]",
   "Skin Temperature [K]",
-  "Eastward windspeed [m/s]", 
+  "Eastward windspeed [m/s]",
   "Northward windspeed [m/s]",
   "Snow Cover [%]",
   "Snow Density [kg/m^3]",
-  "Snow Depth [m]", 
+  "Snow Depth [m]",
   "Snow Depth Water Equivalent [m]",
   "Snow Evaporation [m]",
   "Snowfall [m]",
@@ -292,11 +292,11 @@ VNames_vec <- c(
 )
 
 # LAYER-TIME Identification ===============================================
-PreMonsoon_ls <- lapply(Data_ls, FUN = function(x){
+PreMonsoon_ls <- lapply(Data_ls, FUN = function(x) {
   x[[format(terra::time(Data_ls[[1]]), "%m") %in% c("03", "04", "05")]] # March - May
 })
 
-PostMonsoon_ls <- lapply(Data_ls, FUN = function(x){
+PostMonsoon_ls <- lapply(Data_ls, FUN = function(x) {
   x[[format(terra::time(Data_ls[[1]]), "%m") %in% c("09", "10", "11")]] # September - November
 })
 
@@ -313,12 +313,12 @@ PostMonsoon_ls <- lapply(Data_ls, FUN = function(x){
 # sum(TimeCheck) / length(TimeCheck)
 
 # CLIMATE CHANGE ==========================================================
-ClimChange_ls <- pblapply(1:length(Data_ls), FUN = function(i){
-	# print(i)
-	# print(Variables_vec[i])
+ClimChange_ls <- pblapply(1:length(Data_ls), FUN = function(i) {
+  # print(i)
+  # print(Variables_vec[i])
   ## limit to region around peaks
   data_rast <- KrigR::Handle.Spatial(Data_ls[[i]], wide_buffer)
-  
+
   ## Mean -----------------------------------------------------------------
   ## Make Yearly Aggregates
   MeanAnnual <- KrigR:::Temporal.Aggr(
@@ -326,36 +326,38 @@ ClimChange_ls <- pblapply(1:length(Data_ls), FUN = function(i){
     "day", 1,
     "year", 1,
     FUN = mean,
-    TZone = "UTC") 
+    TZone = "UTC"
+  )
   Var <- VNames_vec[[i]]
-  
+
   ## Analyse change in region by 2-decade-intervals
   plot_df <- data.frame(
-    Values = c(as.vector(terra::values(MeanAnnual[[1:20]])), 
-               as.vector(terra::values(MeanAnnual[[(nlyr(MeanAnnual)-19):nlyr(MeanAnnual)]]))
+    Values = c(
+      as.vector(terra::values(MeanAnnual[[1:20]])),
+      as.vector(terra::values(MeanAnnual[[(nlyr(MeanAnnual) - 19):nlyr(MeanAnnual)]]))
     ),
     Time = rep(c("Beginning", "Ending"), each = length(as.vector(terra::values(MeanAnnual[[1:20]]))))
   )
-  climatechange_timewindow <- ggplot(plot_df, aes(x = Time, y = Values)) + 
-    geom_violin() + 
-    geom_boxplot(width = 0.1) + 
-    stat_compare_means(comparisons = list(c("Beginning", "Ending")), paired = TRUE) + 
-    theme_bw() + 
-    scale_x_discrete(labels=c("Beginning" = "1951 - 1970", "Ending" = "2002 - 2021")) + 
+  climatechange_timewindow <- ggplot(plot_df, aes(x = Time, y = Values)) +
+    geom_violin() +
+    geom_boxplot(width = 0.1) +
+    stat_compare_means(comparisons = list(c("Beginning", "Ending")), paired = TRUE) +
+    theme_bw() +
+    scale_x_discrete(labels = c("Beginning" = "1951 - 1970", "Ending" = "2002 - 2021")) +
     labs(x = "Time-Windows", y = Var)
-  
+
   ## Analyse change in region by year
   plot_df <- data.frame(
     Year = as.numeric(format(terra::time(MeanAnnual), "%Y")),
     mean = terra::global(MeanAnnual, mean, na.rm = TRUE),
     sd = terra::global(MeanAnnual, sd, na.rm = TRUE)
   )
-  climatechange_region <- ggplot(plot_df, aes(x = Year, y = mean)) + 
-    geom_point() + 
+  climatechange_region <- ggplot(plot_df, aes(x = Year, y = mean)) +
+    geom_point() +
     stat_smooth(method = "lm") +
-    theme_bw() + 
+    theme_bw() +
     labs(y = paste("Annual", Var, "Mean"))
-  
+
   # ## Analyse change at summits
   # means_summits <- terra::extract(MeanAnnual, eightks_sf, method = "bilinear")
   # rownames(means_summits) <- eightks_sf$ID
@@ -365,121 +367,131 @@ ClimChange_ls <- pblapply(1:length(Data_ls), FUN = function(i){
   #   Year = as.numeric(format(terra::time(MeanAnnual), "%Y"))
   #   )
   # climchange_summits <- ggplot(plot_df, aes(x = Year, y = mean
-  #                                           , 
+  #                                           ,
   #                                           colour = as.factor(Summit)
-  #                                           )) + 
-  #   geom_point() + 
+  #                                           )) +
+  #   geom_point() +
   #   stat_smooth(method = "lm", alpha = 0.1) +
-  #   scale_colour_viridis_d() + 
-  #   theme_bw() + 
-  #   theme(legend.position = "bottom") + guides(colour = guide_legend(nrow = 1)) + 
+  #   scale_colour_viridis_d() +
+  #   theme_bw() +
+  #   theme(legend.position = "bottom") + guides(colour = guide_legend(nrow = 1)) +
   #   labs(y = "Annual Mean", colour = "Summit ID")
   # climchange_summits
-  
+
   save_gg <- cowplot::plot_grid(climatechange_timewindow,
-                     climatechange_region, 
-                     nrow = 1)
-  ggsave(save_gg, filename = file.path(Dir.Exports, paste0("ClimChange_", sub(" \\[.*", "", Var), ".png")),
-         width = 32, height = 12, units = "cm")
-  
+    climatechange_region,
+    nrow = 1
+  )
+  ggsave(save_gg,
+    filename = file.path(Dir.Exports, paste0("ClimChange_", sub(" \\[.*", "", Var), ".png")),
+    width = 32, height = 12, units = "cm"
+  )
+
   ## Predictability -------------------------------------------------------
   ar <- function(x, lag = 1) {
     # Remove NA values
     ts <- x[!is.na(x)]
-    
+
     # Check if there is sufficient data for the specified lag
     if (length(ts) <= lag) {
       return(NA) # Not enough data for the specified lag
     }
-    
+
     # Create lagged time series
     ts_lagged <- ts[1:(length(ts) - lag)] # Exclude the last `lag` values
     ts_original <- ts[(lag + 1):length(ts)] # Exclude the first `lag` values
-    
+
     # Compute the correlation
     cor(ts_lagged, ts_original, use = "complete.obs")
   }
-  
-  Predcitability_ls <- lapply(c(1,2,3,5,10), FUN = function(k){
+
+  Predcitability_ls <- lapply(c(1, 2, 3, 5, 10), FUN = function(k) {
     ## ARs
-    BeginAr <- app(data_rast[[format(terra::time(data_rast), "%Y") %in% as.character(1951:1970)]], 
-                   fun = function(x) ar(x, lag = k))
-    
+    BeginAr <- app(data_rast[[format(terra::time(data_rast), "%Y") %in% as.character(1951:1970)]],
+      fun = function(x) ar(x, lag = k)
+    )
+
     EndAr <- app(data_rast[[format(terra::time(data_rast), "%Y") %in% as.character(2002:2021)]],
-                 fun = function(x) ar(x, lag = k))
-    
+      fun = function(x) ar(x, lag = k)
+    )
+
     ## map
-    map_gg <- KrigR::Plot.SpatRast(EndAr - BeginAr, Dates = paste0("AR ", k, " Difference (", Var, ")"), SF = summits_sf, Shape = 2, Size = 3,
-                                   Legend = paste("AR", k)) +
+    map_gg <- KrigR::Plot.SpatRast(EndAr - BeginAr,
+      Dates = paste0("AR ", k, " Difference (", Var, ")"), SF = summits_sf, Shape = 2, Size = 3,
+      Legend = paste("AR", k)
+    ) +
       ggrepel::geom_text_repel(
         data = summits_df[summits_df$HEIGHTM >= 8000, ],
         aes(x = LON, y = LAT, label = PKNAME),
         max.overlaps = 30
       )
-    
+
     ## boxplot
     plot_df <- data.frame(
       Values = c(terra::values(BeginAr), terra::values(EndAr)),
       Time = rep(c("Beginning", "Ending"), each = length(terra::values(BeginAr)))
     )
-    bp_gg <- ggplot(plot_df, aes(x = Time, y = Values)) + 
-      geom_violin() + 
-      geom_boxplot(width = 0.1) + 
-      stat_compare_means(comparisons = list(c("Beginning", "Ending")), paired = TRUE) + 
-      theme_bw() + 
-      scale_x_discrete(labels=c("Beginning" = "1951 - 1970", "Ending" = "2002 - 2021")) + 
+    bp_gg <- ggplot(plot_df, aes(x = Time, y = Values)) +
+      geom_violin() +
+      geom_boxplot(width = 0.1) +
+      stat_compare_means(comparisons = list(c("Beginning", "Ending")), paired = TRUE) +
+      theme_bw() +
+      scale_x_discrete(labels = c("Beginning" = "1951 - 1970", "Ending" = "2002 - 2021")) +
       labs(x = "Time-Windows", y = paste0("AR ", k, " (", Var, ")"))
-    
+
     ## combined plot
     save_gg <- cowplot::plot_grid(bp_gg,
-                                  map_gg, 
-                                  nrow = 1)
+      map_gg,
+      nrow = 1
+    )
     save_gg
   })
-  
-  ggsave(cowplot::plot_grid(plotlist = Predcitability_ls, ncol = 1), 
-         filename = file.path(Dir.Exports, paste0("Predictability_", sub(" \\[.*", "", Var), ".png")),
-         width = 39.5, height = 46, units = "cm")
-  
+
+  ggsave(cowplot::plot_grid(plotlist = Predcitability_ls, ncol = 1),
+    filename = file.path(Dir.Exports, paste0("Predictability_", sub(" \\[.*", "", Var), ".png")),
+    width = 39.5, height = 46, units = "cm"
+  )
 })
 
 
- # EXTREMES ================================================================
-Seasons_ls <- list(`Pre-Monsoon` = PreMonsoon_ls,
-                   `Post-Monsoon` = PostMonsoon_ls)
+# EXTREMES ================================================================
+Seasons_ls <- list(
+  `Pre-Monsoon` = PreMonsoon_ls,
+  `Post-Monsoon` = PostMonsoon_ls
+)
 
-pblapply(1:length(Seasons_ls[[1]]), FUN = function(VarI){
+pblapply(1:length(Seasons_ls[[1]]), FUN = function(VarI) {
   VName <- VNames_vec[VarI]
   # message(VarI)
   # print(VName)
-  
-  Seasons_ggs <- lapply(1:length(Seasons_ls), FUN = function(SeasonI){
+
+  Seasons_ggs <- lapply(1:length(Seasons_ls), FUN = function(SeasonI) {
     SeasonName <- names(Seasons_ls)[SeasonI]
     data_rast <- Seasons_ls[[SeasonName]][[VarI]]
-    
+
     ## peaks
     data_df <- data.frame(t(terra::extract(data_rast, eightks_sf, method = "bilinear", df = TRUE)[, -1]))
     colnames(data_df) <- eightks_sf$PKNAME
     rownames(data_df) <- c() # terra::time(data_rast)
-    
+
     quantiles_df <- apply(X = data_df, MARGIN = 2, FUN = quantile, na.rm = TRUE, probs = c(0.05, 0.95))
-    
-    
+
+
     Big_df <- tidyr::pivot_longer(data_df, cols = colnames(data_df))
-    
+
     Big_df$time <- as.numeric(rep(format(terra::time(data_rast), "%Y"), each = ncol(data_df)))
     Big_df$QL <- as.numeric(quantiles_df[1, match(Big_df$name, colnames(quantiles_df))])
     Big_df$QU <- as.numeric(quantiles_df[2, match(Big_df$name, colnames(quantiles_df))])
     Big_df$Upper <- Big_df$value > Big_df$QU
     Big_df$Lower <- Big_df$value < Big_df$QL
-    
+
     ## average exceeding lengths
     # Function to calculate average run length
     calculate_avg_run_length <- function(data, col_name) {
       rle_result <- rle(data[[col_name]])
       mean(rle_result$lengths[rle_result$values])
     }
-    
+
     # Group by time and name, then calculate the average run length
     result <- Big_df %>%
       group_by(time, name) %>%
@@ -493,67 +505,79 @@ pblapply(1:length(Seasons_ls[[1]]), FUN = function(VarI){
     Lower$Bound <- "0.05"
     colnames(Lower) <- c("Year", "Peak", "Exceeded", "Quantile")
     Lower$Length <- result$avg_lower_run_length
-    
+
     Upper <- aggregate(Big_df, Upper ~ time * name, FUN = sum)
     Upper$Bound <- "0.95"
     colnames(Upper) <- c("Year", "Peak", "Exceeded", "Quantile")
     Upper$Length <- result$avg_upper_run_length
-    
+
     # combining data
     plot_df <- rbind(
-      Lower, 
+      Lower,
       Upper
     )
-    
+
     # number exceeding quantile bounds
-    Legend <- get_legend(ggplot(plot_df, aes(x = as.numeric(Year), y = Exceeded, 
-                        shape = Quantile, colour = Peak,
-                        lty = Quantile)) + 
+    Legend <- get_legend(ggplot(plot_df, aes(
+      x = as.numeric(Year), y = Exceeded,
+      shape = Quantile, colour = Peak,
+      lty = Quantile
+    )) +
       geom_point() +
-      stat_smooth(method = "lm", alpha = 0.05) + 
-      scale_colour_viridis_d() + 
-      theme_bw() + 
-      labs(x = "Year", y = "Days Exceeding Quantile Bounds", title = SeasonName) + 
+      stat_smooth(method = "lm", alpha = 0.05) +
+      scale_colour_viridis_d() +
+      theme_bw() +
+      labs(x = "Year", y = "Days Exceeding Quantile Bounds", title = SeasonName) +
       theme(legend.position = "bottom"))
-    
-    
+
+
     save_gg <- plot_grid(
-      ggplot(plot_df, aes(x = as.numeric(Year), y = Exceeded, 
-                                     shape = Quantile, colour = Peak,
-                                     lty = Quantile)) + 
+      ggplot(plot_df, aes(
+        x = as.numeric(Year), y = Exceeded,
+        shape = Quantile, colour = Peak,
+        lty = Quantile
+      )) +
         geom_point() +
-        stat_smooth(method = "lm", alpha = 0.05) + 
-        scale_colour_viridis_d() + 
-        theme_bw() + 
-        labs(x = "Year", y = "Days Exceeding Quantile Bounds", title = SeasonName) + 
+        stat_smooth(method = "lm", alpha = 0.05) +
+        scale_colour_viridis_d() +
+        theme_bw() +
+        labs(x = "Year", y = "Days Exceeding Quantile Bounds", title = SeasonName) +
         theme(legend.position = "none"),
-      ggplot(plot_df, aes(x = as.numeric(Year), y = Length, 
-                          shape = Quantile, colour = Peak,
-                          lty = Quantile)) + 
+      ggplot(plot_df, aes(
+        x = as.numeric(Year), y = Length,
+        shape = Quantile, colour = Peak,
+        lty = Quantile
+      )) +
         geom_point() +
-        stat_smooth(method = "lm", alpha = 0.05) + 
-        scale_colour_viridis_d() + 
-        theme_bw() + 
-        labs(x = "Year", y = "Average Number of Consecutive Days Exceeding Quantile Bounds", title = SeasonName) + 
-        theme(legend.position = "none") + lims(y = c(0, NA)),
+        stat_smooth(method = "lm", alpha = 0.05) +
+        scale_colour_viridis_d() +
+        theme_bw() +
+        labs(x = "Year", y = "Average Number of Consecutive Days Exceeding Quantile Bounds", title = SeasonName) +
+        theme(legend.position = "none") +
+        lims(y = c(0, NA)),
       ncol = 1
     )
-    list(save_gg,
-         Legend)
+    list(
+      save_gg,
+      Legend
+    )
   })
-  
+
   save_gg <- plot_grid(
     plot_grid(plotlist = lapply(Seasons_ggs, "[[", 1), nrow = 1),
     Seasons_ggs[[1]][[2]],
-    ncol = 1, rel_heights = c(1, 0.1))
-  
-  
-  ggsave(save_gg, filename = file.path(Dir.Exports, paste0("Extremes_", sub(" \\[.*", "", VName), ".png")),
-         width = 32*1.5, height = 24*1.5, units = "cm")
+    ncol = 1, rel_heights = c(1, 0.1)
+  )
+
+
+  ggsave(save_gg,
+    filename = file.path(Dir.Exports, paste0("Extremes_", sub(" \\[.*", "", VName), ".png")),
+    width = 32 * 1.5, height = 24 * 1.5, units = "cm"
+  )
 })
 
 # COMPOUND EVENTS =========================================================
-## thresholds and ideas modelled after  ISBN-13 ‏ : ‎ 978-0071370264 
+## thresholds and ideas modelled after  ISBN-13 ‏ : ‎ 978-0071370264
 
 
 
@@ -564,26 +588,61 @@ pblapply(1:length(Seasons_ls[[1]]), FUN = function(VarI){
 
 
 # KRIGING =================================================================
-# COP_kriged <- rast(file.path(Dir.Exports, "COP_krig.nc"))
-# # Data <- mean(rast(list.files(Dir.Data, pattern = ".nc", full.names = TRUE)[2]))
+## Raw Data ---------------------
+Data <- Data_ls$"2m_temperature"[[which(terra::time(Data_ls[["2m_temperature"]]) == "1996-05-10")]] # krakauer storm
 
-# Map_gg <- ggplot() +
-#   geom_spatraster(data = Data, aes(fill = mean)) +
-#   geom_spatraster(data = COP_kriged, aes(fill = COP_krig)) +
-#   geom_sf(data = Peaks_buffer, color = "black", fill = "transparent") +
-#   geom_sf(data = Peaks_sf, shape = 2) +
-#   ggrepel::geom_text_repel(
-#     data = Peaks_df,
-#     aes(x = Lon, y = Lat, label = PKNAME),
-#     max.overlaps = 30
-#   ) +
-#   scale_fill_viridis_c(option = "A", na.value = "transparent", name = "[K]") +
-#   labs(title = "Temperature of Snow Layer") +
-#   theme_bw() +
-#   theme(legend.position = "bottom", legend.key.width = unit(2.5, "cm"))
-# Map_gg
+## Covariates ---------------------
+COP_DEM <- rast(file.path(Dir.Covariates, "COP30.tif"))
+# COP_DEM <- terra::aggregate(COP_DEM, fact = 2) # have to upscale to circumvent "coordinate intervals are not constant" when creating spatialpixels data frame in krigR
 
-# ggsave(Map_gg,
-#   filename = file.path(Dir.Exports, "PLOT_Maps.png"),
-#   width = 16, height = 8
-# )
+## Kriging Buffer ---------------------
+Peaks_buffer <- st_buffer(eightks_sf[, "ID"], dist = 30 * 1e3)
+st_crs(Peaks_buffer) <- terra::crs(COP_DEM)
+st_crs(eightks_sf) <- terra::crs(COP_DEM)
+
+## Preparing Rasters -------------------
+# Data <- crop(Data, Peaks_buffer)
+# COP_DEM <- crop(COP_DEM, Peaks_buffer)
+COP_coarse <- resample(COP_DEM, Data)
+COP_fine <- KrigR:::Handle.Spatial(COP_DEM, Peaks_buffer)
+rm(COP_DEM)
+
+## Actual Kriging ---------------------
+COP_krig <- Kriging(
+  Data = Data,
+  Covariates_training = COP_coarse,
+  Covariates_target = COP_fine,
+  Keep_Temporary = FALSE,
+  Cores = 1, # parallel::detectCores(),
+  Equation = "COP30",
+  nmax = 40,
+  FileName = paste0("DEMO", "_KRIG"),
+  Dir = Dir.Exports
+)
+
+## Plotting ---------------------
+COP_kriged <- COP_krig$Prediction - 273.15
+PlotData <- crop(Data, ext(COP_kriged)) - 273.15
+
+Map_gg <- ggplot() +
+  geom_spatraster(data = PlotData) +
+  geom_spatraster(data = COP_kriged) +
+  geom_sf(data = st_union(Peaks_buffer), color = "black", fill = "transparent") +
+  geom_sf(data = eightks_sf, shape = 2, colour = "white") +
+  ggrepel::geom_text_repel(
+    data = summits_df[summits_df$HEIGHTM >= 8000, ],
+    aes(x = LON, y = LAT, label = PKNAME),
+    max.overlaps = 30,
+    colour = "white"
+  ) +
+  scale_fill_viridis_c(option = "A", na.value = "transparent", name = "[°C]") +
+  labs(title = "Air Temperature on 1996-05-10", y = "Latitude", x = "Longitude") +
+  theme_bw() +
+  theme(panel.background = element_rect(fill = "darkgrey", color = "darkgrey")) +
+  theme(legend.position = "bottom", legend.key.width = unit(5, "cm"), legend.key.height = unit(1, "cm"))
+Map_gg
+
+ggsave(Map_gg,
+  filename = file.path(Dir.Exports, "DEMO_Interpolation.png"),
+  width = 16, height = 10
+)
