@@ -313,7 +313,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
   if (!dir.exists(Dir.Var)) {
     dir.create(Dir.Var)
   }
-  FName <- file.path(Dir.Var, paste0("ClimChange_", sub(" \\[.*", "", Var), ".png"))
+  FName <- file.path(Dir.Var, paste0("ClimChange_", sub(" \\[.*", "", Variables_vec[i]), ".png"))
 
   if (file.exists(paste0(tools::file_path_sans_ext(FName), "_Predictability.png"))) {
     next()
