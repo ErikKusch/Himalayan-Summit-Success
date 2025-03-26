@@ -199,7 +199,7 @@ narrow_buffer <- KrigR::Buffer.pts(summits_sf, 2e4) # equates to roughly three g
 wide_buffer <- KrigR::Buffer.pts(summits_sf, 1e5) # equates to roughly three grid cells in either direction
 
 ## ERA5-Land --------------------------------------------------------------
-message("#### Raw Data")
+message("#### Raw Data ############################################")
 Variables_vec <- c(
   "2m_temperature",
   "skin_temperature",
@@ -304,7 +304,7 @@ PostMonsoon_ls <- lapply(Data_ls, FUN = function(x) {
 })
 
 # CLIMATE CHANGE ==========================================================
-message("#### Climate Change")
+message("#### Climate Change ############################################")
 ClimChange_ls <- for (i in 1:length(Data_ls)) {
   # print(i)
   message(Variables_vec[i])
@@ -513,7 +513,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
 }
 
 # EXTREMES ================================================================
-message("#### Climate Extremes")
+message("#### Climate Extremes ############################################")
 Seasons_ls <- list(
   `Pre-Monsoon` = PreMonsoon_ls,
   `Post-Monsoon` = PostMonsoon_ls
@@ -527,7 +527,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
   if (!dir.exists(Dir.Var)) {
     dir.create(Dir.Var)
   }
-  FName <- file.path(Dir.Var, paste0("Extremes_", sub(" \\[.*", "", Var), ".png"))
+  FName <- file.path(Dir.Var, paste0("Extremes_", sub(" \\[.*", "", Variables_vec[VarI]), ".png"))
 
   if (file.exists(paste0(tools::file_path_sans_ext(FName), "_Length.png"))) {
     next()
@@ -678,19 +678,19 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
 
 
 # COMPOUND EVENTS =========================================================
-message("#### Compund Events")
+message("#### Compund Events ############################################")
 ## thresholds and ideas modelled after  ISBN-13 ‏ : ‎ 978-0071370264
 stop("snowstorm time")
 
 
 
 # FUSING WITH EXPEDITION DATA =============================================
-message("#### Model Data Frame")
+message("#### Model Data Frame ############################################")
 
 
 
 # KRIGING =================================================================
-message("#### Kriging Showcase")
+message("#### Kriging Showcase ############################################")
 
 ## Raw Data ---------------------
 Data <- Data_ls$"2m_temperature"[[which(terra::time(Data_ls[["2m_temperature"]]) == "1996-05-10")]] # krakauer storm
