@@ -524,11 +524,12 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
   VName <- VNames_vec[VarI]
   # message(VarI)
   message(VName)
-  Dir.Var <- file.path(Dir.Exports, Variables_vec[i])
+  Dir.Var <- file.path(Dir.Exports, Variables_vec[VarI])
   if (!dir.exists(Dir.Var)) {
     dir.create(Dir.Var)
   }
   FName <- file.path(Dir.Var, paste0("Extremes_", sub(" \\[.*", "", Variables_vec[VarI]), ".png"))
+  print(FName)
 
   if (file.exists(paste0(tools::file_path_sans_ext(FName), "_Length.png"))) {
     next()
