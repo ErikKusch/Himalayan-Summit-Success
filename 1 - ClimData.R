@@ -293,6 +293,7 @@ VNames_vec <- c(
   "Temperature of Snow Layer [K]",
   "Windspeed [m/s]"
 )
+Variables_vec <- c(Variables_vec, "windspeed")
 
 # LAYER-TIME Identification ===============================================
 PreMonsoon_ls <- lapply(Data_ls, FUN = function(x) {
