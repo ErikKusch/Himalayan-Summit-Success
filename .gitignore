@@ -50,8 +50,9 @@ rsconnect/
 
 # Folders with Data
 Data/*
-Exports/*
 Logo/*
+*.nc
+*.docx
 
 # DS Store for mac coding
 **/.DS_Store

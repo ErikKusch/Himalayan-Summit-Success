@@ -609,12 +609,26 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
         theme(legend.position = "bottom")
 
       Peak_ls <- pblapply(unique(Iter_df$Peak), FUN = function(PeakIter) {
+        print(PeakIter)
+        print(QuanIter)
+        print(SeasonName)
         Peak_df <- Iter_df[Iter_df$Peak == PeakIter, ]
-        E_BRM <- brms::brm(formula = Exceeded ~ Year, data = Peak_df)
-        L_BRM <- brms::brm(formula = Length ~ Year, data = Peak_df)
+        if (sum(Peak_df$Exceeded != 0) > 3) {
+          E_BRM <- brms::brm(formula = Exceeded ~ Year, data = Peak_df)
+          Exceeded <- unlist(lapply(brms::as_draws(E_BRM), "[[", "b_Year"))
+        } else {
+          Exceeded <- rep(NA, 4000)
+        }
+        if (sum(!is.na(Peak_df$Length)) > 3) {
+          L_BRM <- brms::brm(formula = Length ~ Year, data = Peak_df)
+          Length <- unlist(lapply(brms::as_draws(L_BRM), "[[", "b_Year"))
+        } else {
+          Length <- rep(NA, 4000)
+        }
+
         list(
-          Exceeded = unlist(lapply(brms::as_draws(E_BRM), "[[", "b_Year")),
-          Length = unlist(lapply(brms::as_draws(L_BRM), "[[", "b_Year"))
+          Exceeded = Exceeded,
+          Length = Length
         )
       })
       names(Peak_ls) <- unique(Iter_df$Peak)
@@ -683,8 +697,25 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
 message("#### Compund Events ############################################")
 ## thresholds and ideas modelled after  ISBN-13 ‏ : ‎ 978-0071370264
 stop("snowstorm time")
+## Wind threshold ---------------------
+wind_raw <- rast(file.path(Dir.Data, "windspeed_RAW.nc"))
 
+Indices <- ceiling((1:terra::nlyr(wind_raw)) / 2e4)
+r_ls <- terra::split(x = wind_raw, f = Indices)
+ret_ls <- pbapply::pblapply(r_ls, FUN = function(Raster_iter) {
+  ret_rast / 15 # m/s; anything greater than 1 is a storm
+})
+wind_thresh <- do.call(c, ret_ls)
 
+# # setGDALconfig("GDAL_MAX_BAND_COUNT", as.character(nlyr(wind_raw)))
+# wind_thresh <- wind_raw / 15 # m/s; anything greater than 1 is a storm
+
+## Snowfall threshold ---------------------
+snow_raw <- rast(file.path(Dir.Data, "snowfall_RAW.nc"))
+snow_cumsum <- roll(snow_raw[[1:48]], 24, "sum", type = "to")
+snow_tresh <- snow_cumsum / 0.2 # m; anything greater than 1 is a storm
+
+## storm conditions ---------------------
 
 # FUSING WITH EXPEDITION DATA =============================================
 message("#### Model Data Frame ############################################")
