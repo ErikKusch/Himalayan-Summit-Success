@@ -696,31 +696,96 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
 # COMPOUND EVENTS =========================================================
 message("#### Compund Events ############################################")
 ## thresholds and ideas modelled after  ISBN-13 ‏ : ‎ 978-0071370264
-stop("snowstorm time")
 ## Wind threshold ---------------------
 wind_raw <- rast(file.path(Dir.Data, "windspeed_RAW.nc"))
-
-Indices <- ceiling((1:terra::nlyr(wind_raw)) / 2e4)
-r_ls <- terra::split(x = wind_raw, f = Indices)
-ret_ls <- pbapply::pblapply(r_ls, FUN = function(Raster_iter) {
-  ret_rast / 15 # m/s; anything greater than 1 is a storm
-})
-wind_thresh <- do.call(c, ret_ls)
-
-# # setGDALconfig("GDAL_MAX_BAND_COUNT", as.character(nlyr(wind_raw)))
-# wind_thresh <- wind_raw / 15 # m/s; anything greater than 1 is a storm
+wind_thresh <- wind_raw / 15 # m/s; anything greater than 1 is a storm
 
 ## Snowfall threshold ---------------------
 snow_raw <- rast(file.path(Dir.Data, "snowfall_RAW.nc"))
-snow_cumsum <- roll(snow_raw[[1:48]], 24, "sum", type = "to")
-snow_tresh <- snow_cumsum / 0.2 # m; anything greater than 1 is a storm
+snow_cumsum <- roll(snow_raw, 24, "sum", type = "to")
+snow_thresh <- snow_cumsum / 0.2 # m; anything greater than 1 is a storm
 
-## storm conditions ---------------------
+## Blizzard conditions ---------------------
+if (file.exists(file.path(Dir.Data, "blizzard_binary.nc"))) {
+  blizzard_Binary <- rast(file.path(Dir.Data, "blizzard_binary.nc"))
+} else {
+  blizzard_Binary <- ((snow_tresh > 1) + (wind_thresh > 1)) == 2
+  blizzard_Binary <- ClimHub:::WriteRead.NC(
+    NC = blizzard_Logical,
+    FName = file.path(Dir.Data, "blizzard_binary.nc"),
+    Variable = "BlizzardConditions",
+    LongVar = "BlizzardConditions",
+    Unit = "",
+    Attrs = NULL,
+    Compression = 9,
+    Write = TRUE
+  )
+}
+
+if (file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
+  blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
+} else {
+  blizzard_Continuous <- (snow_tresh + wind_thresh) / 2
+  blizzard <- Continuous <- ClimHub:::WriteRead.NC(
+    NC = blizzard_Continuous,
+    FName = file.path(Dir.Data, "blizzard_continuous.nc"),
+    Variable = "BlizzardConditions",
+    LongVar = "BlizzardConditions",
+    Unit = "",
+    Attrs = NULL,
+    Compression = 9,
+    Write = TRUE
+  )
+}
+
+## Analysis for peaks ---------------------
+
 
 # FUSING WITH EXPEDITION DATA =============================================
 message("#### Model Data Frame ############################################")
+Expeditions_df <- Expeditions_df[Expeditions_df$PKNAME %in% summits_sf$PKNAME, ] # reduce to only those summits for which we have coordinates, losing 31 rows of data in Expeditions out of a total of 1917
+Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$TERMDATE, 1, 4)) > 1950, ] # climate data only available for 1951 onwards, losing a further 5 expeditions
+Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$BCDATE, 1, 4)) < 2022, ] # climate data only available until end of 2021, losing a further 26 expeditions
 
+Datadf_ls <- pblapply(names(Data_ls), FUN = function(VarName) {
+  # VarName = names(Data_ls)[1]
+  VarIter <- Data_ls[[VarName]]
+  VarTime <- t(terra::extract(
+    VarIter, # variable during time between BC and TERM
+    summits_sf[summits_sf$PKNAME %in% Expeditions_df$PKNAME, ],
+    method = "bilinear", fun = "mean"
+  ))
+  VarTime <- data.frame(VarTime[-1, ])
+  colnames(VarTime) <- summits_sf$PKNAME[summits_sf$PKNAME %in% Expeditions_df$PKNAME]
+  rownames(VarTime) <- as.character(time(VarIter))
+  VarTime
+})
+names(Datadf_ls) <- names(Data_ls)
 
+Extract_df <- pbapply(Expeditions_df, MARGIN = 1, FUN = function(ExIter) {
+  # ExIter <- Expeditions_df[178, ]
+  print(ExIter[1])
+  Peak <- ExIter["PKNAME"]
+  BC <- ExIter["BCDATE"]
+  TERM <- ExIter["TERMDATE"]
+  df_ls <- lapply(names(Datadf_ls), FUN = function(VarName) {
+    # VarName = names(Datadf_ls)[1]
+    VarIter <- Datadf_ls[[VarName]]
+
+    VarTime <- VarIter[which(rownames(VarIter) >= BC)[1]:tail(which(rownames(VarIter) <= TERM), 1), which(colnames(VarIter) == Peak)]
+
+    df1 <- data.frame(
+      "mean" = mean(as.numeric(VarTime)),
+      "sd" = sd(as.numeric(VarTime))
+    )
+    colnames(df1) <- paste(VarName, colnames(df1), sep = "_")
+    df1
+  })
+  do.call(cbind, df_ls)
+})
+
+Expeditions_Export <- cbind(Expeditions_df, do.call(rbind, Extract_df))
+write.csv(Expeditions_df, file = file.path(Dir.Exports, "ModelData.csv"))
 
 # KRIGING =================================================================
 message("#### Kriging Showcase ############################################")
