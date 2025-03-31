@@ -696,47 +696,56 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
 # COMPOUND EVENTS =========================================================
 message("#### Compund Events ############################################")
 ## thresholds and ideas modelled after  ISBN-13 ‏ : ‎ 978-0071370264
-## Wind threshold ---------------------
-wind_raw <- rast(file.path(Dir.Data, "windspeed_RAW.nc"))
-wind_thresh <- wind_raw / 15 # m/s; anything greater than 1 is a storm
 
-## Snowfall threshold ---------------------
-snow_raw <- rast(file.path(Dir.Data, "snowfall_RAW.nc"))
-snow_cumsum <- roll(snow_raw, 24, "sum", type = "to")
-snow_thresh <- snow_cumsum / 0.2 # m; anything greater than 1 is a storm
-
-## Blizzard conditions ---------------------
-if (file.exists(file.path(Dir.Data, "blizzard_binary.nc"))) {
+if (file.exists(file.path(Dir.Data, "blizzard_binary.nc")) & file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
+  blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
   blizzard_Binary <- rast(file.path(Dir.Data, "blizzard_binary.nc"))
 } else {
-  blizzard_Binary <- ((snow_tresh > 1) + (wind_thresh > 1)) == 2
-  blizzard_Binary <- ClimHub:::WriteRead.NC(
-    NC = blizzard_Logical,
-    FName = file.path(Dir.Data, "blizzard_binary.nc"),
-    Variable = "BlizzardConditions",
-    LongVar = "BlizzardConditions",
-    Unit = "",
-    Attrs = NULL,
-    Compression = 9,
-    Write = TRUE
-  )
+  ## Snowfall threshold ---------------------
+  snow_raw <- rast(file.path(Dir.Data, "snowfall_RAW.nc"))
+  snow_cumsum <- roll(snow_raw, 24, "sum", type = "to")
+  snow_thresh <- snow_cumsum / 0.2 # m; anything greater than 1 is a storm
+
+  ## Wind threshold ---------------------
+  wind_raw <- rast(file.path(Dir.Data, "windspeed_RAW.nc"))
+  wind_raw <- wind_raw[[time(wind_raw) %in% time(snow_raw)]]
+  wind_thresh <- wind_raw / 15 # m/s; anything greater than 1 is a storm
+
+  ## Blizzard conditions ---------------------
+  if (file.exists(file.path(Dir.Data, "blizzard_binary.nc"))) {
+    blizzard_Binary <- rast(file.path(Dir.Data, "blizzard_binary.nc"))
+  } else {
+    blizzard_Binary <- ((snow_tresh > 1) + (wind_thresh > 1)) == 2
+    blizzard_Binary <- ClimHub:::WriteRead.NC(
+      NC = blizzard_Logical,
+      FName = file.path(Dir.Data, "blizzard_binary.nc"),
+      Variable = "BlizzardConditions",
+      LongVar = "BlizzardConditions",
+      Unit = "",
+      Attrs = NULL,
+      Compression = 9,
+      Write = TRUE
+    )
+  }
+
+  if (file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
+    blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
+  } else {
+    blizzard_Continuous <- (snow_tresh + wind_thresh) / 2
+    blizzard <- Continuous <- ClimHub:::WriteRead.NC(
+      NC = blizzard_Continuous,
+      FName = file.path(Dir.Data, "blizzard_continuous.nc"),
+      Variable = "BlizzardConditions",
+      LongVar = "BlizzardConditions",
+      Unit = "",
+      Attrs = NULL,
+      Compression = 9,
+      Write = TRUE
+    )
+  }
 }
 
-if (file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
-  blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
-} else {
-  blizzard_Continuous <- (snow_tresh + wind_thresh) / 2
-  blizzard <- Continuous <- ClimHub:::WriteRead.NC(
-    NC = blizzard_Continuous,
-    FName = file.path(Dir.Data, "blizzard_continuous.nc"),
-    Variable = "BlizzardConditions",
-    LongVar = "BlizzardConditions",
-    Unit = "",
-    Attrs = NULL,
-    Compression = 9,
-    Write = TRUE
-  )
-}
+
 
 ## Analysis for peaks ---------------------
 
