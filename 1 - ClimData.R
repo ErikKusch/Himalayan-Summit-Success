@@ -696,7 +696,6 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
 # COMPOUND EVENTS =========================================================
 message("#### Compund Events ############################################")
 ## thresholds and ideas modelled after  ISBN-13 ‏ : ‎ 978-0071370264
-
 if (file.exists(file.path(Dir.Data, "blizzard_binary.nc")) & file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
   blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
   blizzard_Binary <- rast(file.path(Dir.Data, "blizzard_binary.nc"))
@@ -715,15 +714,16 @@ if (file.exists(file.path(Dir.Data, "blizzard_binary.nc")) & file.exists(file.pa
   if (file.exists(file.path(Dir.Data, "blizzard_binary.nc"))) {
     blizzard_Binary <- rast(file.path(Dir.Data, "blizzard_binary.nc"))
   } else {
-    blizzard_Binary <- ((snow_tresh > 1) + (wind_thresh > 1)) == 2
+    blizzard_Binary <- ((snow_thresh > 1) + (wind_thresh > 1)) == 2
+    time(blizzard_Binary) <- time(snow_thresh)
     blizzard_Binary <- ClimHub:::WriteRead.NC(
-      NC = blizzard_Logical,
+      NC = blizzard_Binary,
       FName = file.path(Dir.Data, "blizzard_binary.nc"),
       Variable = "BlizzardConditions",
       LongVar = "BlizzardConditions",
       Unit = "",
       Attrs = NULL,
-      Compression = 9,
+      Compression = NA,
       Write = TRUE
     )
   }
@@ -731,7 +731,8 @@ if (file.exists(file.path(Dir.Data, "blizzard_binary.nc")) & file.exists(file.pa
   if (file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
     blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
   } else {
-    blizzard_Continuous <- (snow_tresh + wind_thresh) / 2
+    blizzard_Continuous <- (snow_thresh + wind_thresh) / 2
+    time(blizzard_Continuous) <- time(snow_thresh)
     blizzard <- Continuous <- ClimHub:::WriteRead.NC(
       NC = blizzard_Continuous,
       FName = file.path(Dir.Data, "blizzard_continuous.nc"),
@@ -739,13 +740,11 @@ if (file.exists(file.path(Dir.Data, "blizzard_binary.nc")) & file.exists(file.pa
       LongVar = "BlizzardConditions",
       Unit = "",
       Attrs = NULL,
-      Compression = 9,
+      Compression = NA,
       Write = TRUE
     )
   }
 }
-
-
 
 ## Analysis for peaks ---------------------
 
