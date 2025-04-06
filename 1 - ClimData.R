@@ -694,60 +694,158 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
 
 
 # COMPOUND EVENTS =========================================================
-message("#### Compund Events ############################################")
-## thresholds and ideas modelled after  ISBN-13 ‏ : ‎ 978-0071370264
-if (file.exists(file.path(Dir.Data, "blizzard_binary.nc")) & file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
-  blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
-  blizzard_Binary <- rast(file.path(Dir.Data, "blizzard_binary.nc"))
-} else {
-  ## Snowfall threshold ---------------------
-  snow_raw <- rast(file.path(Dir.Data, "snowfall_RAW.nc"))
-  snow_cumsum <- roll(snow_raw, 24, "sum", type = "to")
-  snow_thresh <- snow_cumsum / 0.2 # m; anything greater than 1 is a storm
+# message("#### Compund Events ############################################")
+# ## thresholds and ideas modelled after  ISBN-13 ‏ : ‎ 978-0071370264
+# if (file.exists(file.path(Dir.Data, "blizzard_binary.nc")) & file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
+#   blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
+#   blizzard_Binary <- rast(file.path(Dir.Data, "blizzard_binary.nc"))
+# } else {
+#   ## Snowfall threshold ---------------------
+#   snow_raw <- rast(file.path(Dir.Data, "snowfall_RAW.nc"))
+#   snow_cumsum <- roll(snow_raw, 24, "sum", type = "to")
+#   snow_thresh <- snow_cumsum / 0.1 # m; anything greater than 1 is a storm: https://www.weather.gov/media/meg/WinterStormCriteriaMEG.pdf
 
-  ## Wind threshold ---------------------
-  wind_raw <- rast(file.path(Dir.Data, "windspeed_RAW.nc"))
-  wind_raw <- wind_raw[[time(wind_raw) %in% time(snow_raw)]]
-  wind_thresh <- wind_raw / 15 # m/s; anything greater than 1 is a storm
+#   ## Wind threshold ---------------------
+#   wind_raw <- rast(file.path(Dir.Data, "windspeed_RAW.nc"))
+#   wind_raw <- wind_raw[[time(wind_raw) %in% time(snow_raw)]]
+#   wind_thresh <- wind_raw / 7.7 # m/s; anything greater than 1 is a storm: DOI: 10.1175/1520-0450(1997)036<0205:EOTWSF>2.0.CO;2
 
-  ## Blizzard conditions ---------------------
-  if (file.exists(file.path(Dir.Data, "blizzard_binary.nc"))) {
-    blizzard_Binary <- rast(file.path(Dir.Data, "blizzard_binary.nc"))
-  } else {
-    blizzard_Binary <- ((snow_thresh > 1) + (wind_thresh > 1)) == 2
-    time(blizzard_Binary) <- time(snow_thresh)
-    blizzard_Binary <- ClimHub:::WriteRead.NC(
-      NC = blizzard_Binary,
-      FName = file.path(Dir.Data, "blizzard_binary.nc"),
-      Variable = "BlizzardConditions",
-      LongVar = "BlizzardConditions",
-      Unit = "",
-      Attrs = NULL,
-      Compression = NA,
-      Write = TRUE
-    )
-  }
+#   ## Blizzard conditions ---------------------
+#   if (file.exists(file.path(Dir.Data, "blizzard_binary.nc"))) {
+#     blizzard_Binary <- rast(file.path(Dir.Data, "blizzard_binary.nc"))
+#   } else {
+#     blizzard_Binary <- ((snow_thresh > 1) + (wind_thresh > 1)) == 2
+#     time(blizzard_Binary) <- time(snow_thresh)
+#     blizzard_Binary <- ClimHub:::WriteRead.NC(
+#       NC = blizzard_Binary,
+#       FName = file.path(Dir.Data, "blizzard_binary.nc"),
+#       Variable = "BlizzardConditions",
+#       LongVar = "BlizzardConditions",
+#       Unit = "",
+#       Attrs = NULL,
+#       Compression = NA,
+#       Write = TRUE
+#     )
+#   }
 
-  if (file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
-    blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
-  } else {
-    blizzard_Continuous <- (snow_thresh + wind_thresh) / 2
-    time(blizzard_Continuous) <- time(snow_thresh)
-    blizzard <- Continuous <- ClimHub:::WriteRead.NC(
-      NC = blizzard_Continuous,
-      FName = file.path(Dir.Data, "blizzard_continuous.nc"),
-      Variable = "BlizzardConditions",
-      LongVar = "BlizzardConditions",
-      Unit = "",
-      Attrs = NULL,
-      Compression = NA,
-      Write = TRUE
-    )
-  }
-}
+#   if (file.exists(file.path(Dir.Data, "blizzard_continuous.nc"))) {
+#     blizzard_Continuous <- rast(file.path(Dir.Data, "blizzard_continuous.nc"))
+#   } else {
+#     blizzard_Continuous <- (snow_thresh + wind_thresh) / 2
+#     time(blizzard_Continuous) <- time(snow_thresh)
+#     blizzard <- Continuous <- ClimHub:::WriteRead.NC(
+#       NC = blizzard_Continuous,
+#       FName = file.path(Dir.Data, "blizzard_continuous.nc"),
+#       Variable = "BlizzardConditions",
+#       LongVar = "BlizzardConditions",
+#       Unit = "",
+#       Attrs = NULL,
+#       Compression = NA,
+#       Write = TRUE
+#     )
+#   }
+# }
 
-## Analysis for peaks ---------------------
+# ## Analysis for peaks ---------------------
+# binary_summits <- t(blizzard_Binary[
+#   terra::cellFromXY(blizzard_Binary[[1]], sf::st_coordinates(eightks_sf))
+# ])
+# # binary_summits <- t(terra::extract(blizzard_Binary, eightks_sf, method = "bilinear", fun = "mean"))[-1, ]
 
+# continuous_summits <- t(blizzard_Continuous[
+#   terra::cellFromXY(blizzard_Continuous[[1]], sf::st_coordinates(eightks_sf))
+# ])
+# # continuous_summits <- t(terra::extract(blizzard_Continuous), eightks_sf, method = "bilinear", fun = "mean"))[-1, ]
+
+# colnames(binary_summits) <- colnames(continuous_summits) <- eightks_sf$PKNAME
+
+# plot_df <- data.frame(
+#   Summit = rep(colnames(binary_summits), each = nlyr(blizzard_Binary)),
+#   binary = unlist(as.vector(binary_summits)),
+#   continuous = unlist(as.vector(continuous_summits)),
+#   Year = as.numeric(format(terra::time(blizzard_Binary), "%Y")),
+#   Date = terra::time(blizzard_Binary)
+# )
+
+# save(plot_df, file = file.path(Dir.Data, "SnowStormPeaks.RData"))
+
+
+# ## count storm events per year
+# count_gg <- aggregate(binary ~ Year + Summit, data = plot_df, FUN = sum, na.rm = TRUE)
+# ggplot(count_gg, aes(x = Year, y = binary, color = Summit)) +
+#   geom_point() +
+#   stat_smooth(method = "lm") +
+#   theme_bw()
+
+# cont_gg <- aggregate(continuous ~ Year + Summit, data = plot_df, FUN = mean, na.rm = TRUE)
+# ggplot(cont_gg, aes(x = Year, y = continuous, color = Summit)) +
+#   geom_point() +
+#   stat_smooth(method = "lm") +
+#   theme_bw()
+
+
+
+
+# Peak_ls <- pblapply(unique(cont_gg$Summit), FUN = function(PeakIter) {
+#   print(PeakIter)
+#   Peak_df <- cont_gg[cont_gg$Summit == PeakIter, ]
+#   C_BRM <- brms::brm(formula = continuous ~ Year, data = Peak_df)
+#   unlist(lapply(brms::as_draws(C_BRM), "[[", "b_Year"))
+# })
+# names(Peak_ls) <- unique(cont_gg$Summit)
+
+# modelplot_df <- data.frame(
+#   Exceeded = unlist(lapply(Peak_ls, "[[", "Exceeded")),
+#   Length = unlist(lapply(Peak_ls, "[[", "Length")),
+#   Peak = rep(names(Peak_ls), each = length(Peak_ls[[1]][[1]]))
+# )
+
+# BRM_E_gg <- ggplot(modelplot_df, aes(y = Peak, x = Exceeded, fill = Peak)) +
+#   stat_halfeye() +
+#   scale_fill_viridis_d() +
+#   theme_bw() +
+#   geom_vline(xintercept = 0) +
+#   theme(legend.position = "bottom")
+
+
+
+
+# Peak_ls <- pblapply(unique(plot_df$Summit), FUN = function(PeakIter) {
+#   print(PeakIter)
+#   Peak_df <- na.omit(plot_df[plot_df$Summit == PeakIter, ])
+#   C_BRM <- brms::brm(formula = continuous ~ Year, data = Peak_df)
+#   # summary(C_BRM)
+#   unlist(lapply(brms::as_draws(C_BRM), "[[", "b_Year"))
+# })
+# names(Peak_ls) <- unique(plot_df$Summit)
+
+# ggplot(plot_df, aes(x = Year, y = continuous, color = Summit)) +
+#   geom_point() +
+#   stat_smooth(method = "lm") +
+#   theme_bw()
+
+
+# modelplot_df <- data.frame(
+#   Exceeded = unlist(lapply(Peak_ls, "[[", "Exceeded")),
+#   Length = unlist(lapply(Peak_ls, "[[", "Length")),
+#   Peak = rep(names(Peak_ls), each = length(Peak_ls[[1]][[1]]))
+# )
+
+# BRM_E_gg <- ggplot(modelplot_df, aes(y = Peak, x = Exceeded, fill = Peak)) +
+#   stat_halfeye() +
+#   scale_fill_viridis_d() +
+#   theme_bw() +
+#   geom_vline(xintercept = 0) +
+#   theme(legend.position = "bottom")
+
+
+
+## count storm events per season
+
+## strength of storms (only where storm conditions are met) per year and season
+## length of storms (only where storm conditions are met) per year and season
+
+## count storm conditions met per day to create data for model data frame
 
 # FUSING WITH EXPEDITION DATA =============================================
 message("#### Model Data Frame ############################################")
@@ -770,21 +868,60 @@ Datadf_ls <- pblapply(names(Data_ls), FUN = function(VarName) {
 })
 names(Datadf_ls) <- names(Data_ls)
 
+quant_df <- do.call(rbind, lapply(names(Datadf_ls), FUN = function(VarIter) {
+  quant_df <- do.call(rbind, lapply(colnames(Datadf_ls[[VarIter]]), FUN = function(PeakIter) {
+    data_df <- data.frame(var = Datadf_ls[[VarIter]][, PeakIter], time = rownames(Datadf_ls[[VarIter]]))
+    data.frame(
+      Var = rep(VarIter, 4),
+      Season = c("Pre", "Pre", "Post", "Post"),
+      Bounds = c("L", "U", "L", "U"),
+      Values = c(
+        quantile(data_df[as.numeric(substr(data_df$time, 6, 7)) %in% 3:5, "var"], probs = c(0.05, 0.95), na.rm = TRUE),
+        quantile(data_df[as.numeric(substr(data_df$time, 6, 7)) %in% 9:11, "var"], probs = c(0.05, 0.95), na.rm = TRUE)
+      ),
+      Peak = rep(PeakIter, 4)
+    )
+  }))
+}))
+
 Extract_df <- pbapply(Expeditions_df, MARGIN = 1, FUN = function(ExIter) {
-  # ExIter <- Expeditions_df[178, ]
-  print(ExIter[1])
+  # ExIter <- Expeditions_df[1, ]
+  # print(ExIter[1])
   Peak <- ExIter["PKNAME"]
   BC <- ExIter["BCDATE"]
   TERM <- ExIter["TERMDATE"]
+  # print(BC)
+  # print(TERM)
+
+  Season <- c("Pre", "Post")[which.min(abs(c(
+    4 - as.numeric(substr(as.character(BC), 6, 7)),
+    8 - as.numeric(substr(as.character(BC), 6, 7))
+  )))]
+  # print(Season)
+
+  # if (as.numeric(substr(as.character(BC), 6, 7)) %in% 3:5) {
+  #   Season <- "Pre"
+  # }
+  # if (as.numeric(substr(as.character(BC), 6, 7)) %in% 9:11) {
+  #   Season <- "Post"
+  # }
+  # if (!exists("Season")) {
+  #   stop("not in seasons")
+  # }
+
   df_ls <- lapply(names(Datadf_ls), FUN = function(VarName) {
     # VarName = names(Datadf_ls)[1]
     VarIter <- Datadf_ls[[VarName]]
 
-    VarTime <- VarIter[which(rownames(VarIter) >= BC)[1]:tail(which(rownames(VarIter) <= TERM), 1), which(colnames(VarIter) == Peak)]
+    VarTime <- VarIter[which(rownames(VarIter) >= as.character(BC))[1]:tail(which(rownames(VarIter) <= as.character(TERM)), 1), which(colnames(VarIter) == Peak)]
+
+    Bounds_df <- quant_df[quant_df$Peak == as.character(Peak) & quant_df$Season == Season & quant_df$Var == VarName, ]
 
     df1 <- data.frame(
       "mean" = mean(as.numeric(VarTime)),
-      "sd" = sd(as.numeric(VarTime))
+      "sd" = sd(as.numeric(VarTime)),
+      "ExtremeLow" = sum(VarTime < Bounds_df$Values[Bounds_df$Bounds == "L"]),
+      "ExtremeHigh" = sum(VarTime > Bounds_df$Values[Bounds_df$Bounds == "U"])
     )
     colnames(df1) <- paste(VarName, colnames(df1), sep = "_")
     df1
@@ -793,7 +930,10 @@ Extract_df <- pbapply(Expeditions_df, MARGIN = 1, FUN = function(ExIter) {
 })
 
 Expeditions_Export <- cbind(Expeditions_df, do.call(rbind, Extract_df))
-write.csv(Expeditions_df, file = file.path(Dir.Exports, "ModelData.csv"))
+write.csv(Expeditions_Export, file = file.path(Dir.Exports, "ModelData.csv"))
+head(Expeditions_Export)
+
+stop("Ready for Chris")
 
 # KRIGING =================================================================
 message("#### Kriging Showcase ############################################")
