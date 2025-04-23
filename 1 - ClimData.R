@@ -194,9 +194,10 @@ summits_sp <- summits_df
 coordinates(summits_sp) <- ~ LON + LAT
 proj4string(summits_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 summits_sf <- st_as_sf(summits_sp)
-eightks_sf <- summits_sf[summits_sf$HEIGHTM >= 8000, ]
-narrow_buffer <- KrigR::Buffer.pts(summits_sf, 2e4) # equates to roughly three grid cells in either direction
-wide_buffer <- KrigR::Buffer.pts(summits_sf, 1e5) # equates to roughly three grid cells in either direction
+eightks_sf <- summits_sf[summits_sf$HEIGHTM >= 7000, ]
+sevenks_sf <- summits_sf[summits_sf$HEIGHTM >= 7000, ]
+narrow_buffer <- KrigR::Buffer.pts(eightks_sf, 2e4) # equates to roughly three grid cells in either direction
+wide_buffer <- KrigR::Buffer.pts(eightks_sf, 1e5) # equates to roughly three grid cells in either direction
 
 ## ERA5-Land --------------------------------------------------------------
 message("#### Raw Data ############################################")
@@ -307,6 +308,7 @@ PostMonsoon_ls <- lapply(Data_ls, FUN = function(x) {
 # CLIMATE CHANGE ==========================================================
 message("#### Climate Change ############################################")
 ClimChange_ls <- for (i in 1:length(Data_ls)) {
+  # i = 1
   # print(i)
   message(Variables_vec[i])
 
@@ -409,19 +411,61 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
     Year = as.numeric(format(terra::time(MeanAnnual), "%Y"))
   )
 
+  labelInfo <- split(plot_df, plot_df$Summit)
+  labelInfo <- lapply(labelInfo, function(dat) {
+    meanLabel <- predict(lm(mean ~ Year, data = dat), newdata = data.frame(Year = max(dat$Year)))
+    sdLabel <- predict(lm(sd ~ Year, data = dat), newdata = data.frame(Year = max(dat$Year)))
+    summit <- unique(dat$Summit)
+    data.frame(meanLabel = meanLabel, sdLabel = sdLabel, Summit = summit)
+  })
+  labelInfo <- do.call(rbind, labelInfo)
+
+  ### Line plots of trends at summits
+  Mean_gg <- ggplot(plot_df, aes(x = Year, y = mean)) +
+    geom_smooth(method = "lm", fill = "#480472", col = "#480472") +
+    geom_smooth(aes(group = Summit), col = "#535353", method = "lm", alpha = 0.2) +
+    geom_label_repel(
+      data = labelInfo,
+      aes(
+        x = max(plot_df$Year), y = meanLabel,
+        label = Summit
+      ),
+      color = "#535353",
+      nudge_x = 7
+    ) +
+    theme_bw() +
+    labs(y = "Mean")
+
+  SD_gg <- ggplot(plot_df, aes(x = Year, y = sd)) +
+    geom_smooth(method = "lm", fill = "#480472", col = "#480472") +
+    geom_smooth(aes(group = Summit), col = "#535353", method = "lm", alpha = 0.2) +
+    geom_label_repel(
+      data = labelInfo,
+      aes(
+        x = max(plot_df$Year), y = sdLabel,
+        label = Summit
+      ),
+      color = "#535353",
+      nudge_x = 7
+    ) +
+    theme_bw() +
+    labs(y = "Standard Deviation")
+
+  ### BRMS models of trends at all summits and indvidual summits
+  ModelMean <- brms::brm(formula = mean ~ Year, data = plot_df)
+  ModelSD <- brms::brm(formula = sd ~ Year, data = plot_df)
+
+  modelplot_df <- data.frame(
+    Value = c(
+      unlist(lapply(brms::as_draws(ModelMean), "[[", "b_Year")),
+      unlist(lapply(brms::as_draws(ModelSD), "[[", "b_Year"))
+    ),
+    Outcome = rep(c("Mean", "SD"), each = length(as_draws(ModelSD)[[1]][[1]]) * length(as_draws(ModelSD))),
+    Summit = "ALL"
+  )
+
   Peaks_gg <- lapply(unique(plot_df$Summit), function(PeakIter) {
     Iter_df <- plot_df[plot_df$Summit == PeakIter, ]
-
-    Mean_gg <- ggplot(Iter_df, aes(x = Year, y = mean)) +
-      geom_point() +
-      stat_smooth(method = "lm") +
-      theme_bw() +
-      labs(y = paste("Annual", Var, "Mean"))
-    SD_gg <- ggplot(Iter_df, aes(x = Year, y = sd)) +
-      geom_point() +
-      stat_smooth(method = "lm") +
-      theme_bw() +
-      labs(y = paste("Annual", Var, "Mean"))
 
     ModelMean <- brms::brm(formula = mean ~ Year, data = Iter_df)
     ModelSD <- brms::brm(formula = sd ~ Year, data = Iter_df)
@@ -430,22 +474,67 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
       SD = unlist(lapply(brms::as_draws(ModelSD), "[[", "b_Year"))
     )
 
-    BRM_mean_gg <- ggplot(modelplot_df, aes(y = "Mean", x = Mean)) +
-      stat_halfeye() +
-      theme_bw() +
-      geom_vline(xintercept = 0)
-    BRM_SD_gg <- ggplot(modelplot_df, aes(y = "SD", x = SD)) +
-      stat_halfeye() +
-      theme_bw() +
-      geom_vline(xintercept = 0)
-
-    save_gg <- plot_grid(Mean_gg, BRM_mean_gg, SD_gg, BRM_SD_gg, nrow = 2)
-
-    ggsave(save_gg,
-      filename = paste0(tools::file_path_sans_ext(FName), "_", PeakIter, ".png"),
-      width = 32, height = 24, units = "cm"
+    modelplot_df <- data.frame(
+      Value = c(
+        unlist(lapply(brms::as_draws(ModelMean), "[[", "b_Year")),
+        unlist(lapply(brms::as_draws(ModelSD), "[[", "b_Year"))
+      ),
+      Outcome = rep(c("Mean", "SD"), each = length(as_draws(ModelSD)[[1]][[1]]) * length(as_draws(ModelSD))),
+      Summit = PeakIter
     )
   })
+  Peaks_gg <- do.call(rbind, Peaks_gg)
+  modelplot_df <- rbind(modelplot_df, Peaks_gg)
+  StatSig <- aggregate(Value ~ Summit + Outcome, modelplot_df, FUN = quantile, c(0.05, 0.95))
+  StatSig$Direction <- sign(StatSig$Value[, 1]) + sign(StatSig$Value[, 2])
+  StatSig$Sig <- abs(StatSig$Direction) == 2
+  modelplot_df$StatSig <- NA
+  for (i in 1:nrow(modelplot_df)) {
+    modelplot_df$StatSig[i] <- StatSig$Sig[intersect(which(StatSig$Outcome == modelplot_df$Outcome[i]), which(StatSig$Summit == modelplot_df$Summit[i]))]
+  }
+  modelplot_df$col <- ifelse(modelplot_df$StatSig, "green", "red")
+  modelplot_df$fill <- ifelse(modelplot_df$Summit == "ALL", "#480472", "#535353")
+
+  BMean_gg <-
+    ggplot(
+      modelplot_df[modelplot_df$Outcome == "Mean", ],
+      aes(
+        y = factor(Summit, levels = rev(c("ALL", rev(labelInfo$Summit[order(labelInfo$meanLabel)])))),
+        x = Value
+      )
+    ) +
+    stat_halfeye(aes(fill = fill)) +
+    scale_fill_manual(values = c("#480472", "#535353")) +
+    geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
+    scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
+    geom_vline(xintercept = 0) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    labs(x = "BRMS Model Coefficient Posterior Samples", y = "")
+
+  BSD_gg <-
+    ggplot(
+      modelplot_df[modelplot_df$Outcome == "SD", ],
+      aes(
+        y = factor(Summit, levels = rev(c("ALL", rev(labelInfo$Summit[order(labelInfo$sdLabel)])))),
+        x = Value
+      )
+    ) +
+    stat_halfeye(aes(fill = fill)) +
+    scale_fill_manual(values = c("#480472", "#535353")) +
+    geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
+    scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
+    geom_vline(xintercept = 0) +
+    theme_bw() +
+    theme(legend.position = "none") +
+    labs(x = "BRMS Model Coefficient Posterior Samples", y = "")
+
+  ### Fusing and final export
+  ggsave(plot_grid(Mean_gg, BMean_gg, SD_gg, BSD_gg, ncol = 2),
+    filename = paste0(tools::file_path_sans_ext(FName), "_Summits.png"),
+    width = 32 * 1.2, height = 22 * 1.2, units = "cm"
+  )
+
   ## Predictability -------------------------------------------------------
   message("Predictability Change")
   ar <- function(x, lag = 1) {
@@ -465,7 +554,8 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
     cor(ts_lagged, ts_original, use = "complete.obs")
   }
 
-  Predcitability_ls <- lapply(c(1, 2, 3, 5, 10), FUN = function(k) {
+  Predcitability_ls <- pblapply(c(1, 2, 3, 5, 10), FUN = function(k) {
+    # k = 1
     ## ARs
     BeginAr <- app(data_rast[[format(terra::time(data_rast), "%Y") %in% as.character(1951:1970)]],
       fun = function(x) ar(x, lag = k)
@@ -477,7 +567,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
 
     ## map
     map_gg <- KrigR::Plot.SpatRast(EndAr - BeginAr,
-      Dates = paste0("AR ", k, " Difference (", Var, ")"), SF = summits_sf, Shape = 2, Size = 3,
+      Dates = paste0("AR ", k, " Difference (", Var, ")"), SF = eightks_sf, Shape = 2, Size = 3,
       Legend = paste("AR", k)
     ) +
       ggrepel::geom_text_repel(
@@ -500,16 +590,28 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
       labs(x = "Time-Windows", y = paste0("AR ", k, " (", Var, ")"))
 
     ## combined plot
-    save_gg <- cowplot::plot_grid(bp_gg,
-      map_gg,
-      nrow = 1
-    )
-    save_gg
+    list(Box = bp_gg, Map = EndAr - BeginAr)
+    # save_gg <- cowplot::plot_grid(bp_gg,
+    #   map_gg,
+    #   nrow = 1
+    # )
+    # save_gg
   })
 
-  ggsave(cowplot::plot_grid(plotlist = Predcitability_ls, ncol = 1),
+  map_gg <- Plot.SpatRast(do.call(c, lapply(Predcitability_ls, "[[", "Map")),
+    Dates = paste0("AR ", c(1, 2, 3, 5, 10), " Difference (", Var, ")"), SF = eightks_sf, Shape = 2, Size = 3,
+    Legend = paste("AR", k),
+    ncol = 1
+  ) +
+    ggrepel::geom_text_repel(
+      data = summits_df[summits_df$HEIGHTM >= 8000, ],
+      aes(x = LON, y = LAT, label = PKNAME),
+      max.overlaps = 30
+    )
+
+  ggsave(plot_grid(plot_grid(plotlist = lapply(Predcitability_ls, "[[", "Box"), ncol = 1), map_gg, ncol = 2),
     filename = paste0(tools::file_path_sans_ext(FName), "_Predictability.png"),
-    width = 39.5, height = 46, units = "cm"
+    width = 45, height = 46, units = "cm"
   )
 }
 
@@ -521,8 +623,8 @@ Seasons_ls <- list(
 )
 
 for (VarI in 1:length(Seasons_ls[[1]])) {
+  # VarI <- 1
   VName <- VNames_vec[VarI]
-  # message(VarI)
   message(VName)
   Dir.Var <- file.path(Dir.Exports, Variables_vec[VarI])
   if (!dir.exists(Dir.Var)) {
@@ -536,6 +638,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
   }
 
   Seasons_ggs <- lapply(1:length(Seasons_ls), FUN = function(SeasonI) {
+    # SeasonI = 1
     SeasonName <- names(Seasons_ls)[SeasonI]
     print(SeasonName)
     data_rast <- Seasons_ls[[SeasonName]][[VarI]]
@@ -980,7 +1083,7 @@ Map_gg <- ggplot() +
   geom_sf(data = st_union(Peaks_buffer), color = "black", fill = "transparent") +
   geom_sf(data = eightks_sf, shape = 2, colour = "white") +
   ggrepel::geom_text_repel(
-    data = summits_df[summits_df$HEIGHTM >= 8000, ],
+    data = summits_df[summits_df$HEIGHTM >= 7000, ],
     aes(x = LON, y = LAT, label = PKNAME),
     max.overlaps = 30,
     colour = "white"
