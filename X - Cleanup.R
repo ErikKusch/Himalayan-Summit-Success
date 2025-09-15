@@ -194,7 +194,7 @@ summits_sp <- summits_df
 coordinates(summits_sp) <- ~ LON + LAT
 proj4string(summits_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 summits_sf <- st_as_sf(summits_sp)
-eightks_sf <- summits_sf[summits_sf$HEIGHTM >= 7000, ]
+eightks_sf <- summits_sf[summits_sf$HEIGHTM >= 8000, ]
 sevenks_sf <- summits_sf[summits_sf$HEIGHTM >= 7000, ]
 narrow_buffer <- KrigR::Buffer.pts(eightks_sf, 2e4) # equates to roughly three grid cells in either direction
 wide_buffer <- KrigR::Buffer.pts(eightks_sf, 1e5) # equates to roughly three grid cells in either direction
@@ -345,7 +345,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
     FUN = sd,
     TZone = "UTC"
   )
-  Var <- VNames_vec[[i]]
+  Var <- VNames_vec[i]
 
   ## Analyse change in region by 2-decade-intervals
   plot_df <- data.frame(
@@ -371,7 +371,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
   )
   climatechange_region <- ggplot(plot_df, aes(x = Year, y = mean)) +
     geom_point() +
-    stat_smooth(method = "lm") +
+    geom_smooth(method = "lm", fill = "#156082", col = "#156082") +
     theme_bw() +
     labs(y = paste("Annual", Var, "Mean"))
 
@@ -426,7 +426,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
 
   ### Line plots of trends at summits
   Mean_gg <- ggplot(plot_df, aes(x = Year, y = mean)) +
-    geom_smooth(method = "lm", fill = "#480472", col = "#480472") +
+    geom_smooth(method = "lm", fill = "#156082", col = "#156082") +
     geom_smooth(aes(group = Summit), col = "#535353", method = "lm", alpha = 0.2) +
     geom_label_repel(
       data = labelInfo,
@@ -441,7 +441,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
     labs(y = "Mean")
 
   SD_gg <- ggplot(plot_df, aes(x = Year, y = sd)) +
-    geom_smooth(method = "lm", fill = "#480472", col = "#480472") +
+    geom_smooth(method = "lm", fill = "#156082", col = "#156082") +
     geom_smooth(aes(group = Summit), col = "#535353", method = "lm", alpha = 0.2) +
     geom_label_repel(
       data = labelInfo,
@@ -469,6 +469,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
   )
 
   Peaks_gg <- lapply(unique(plot_df$Summit), function(PeakIter) {
+    message(PeakIter)
     Iter_df <- plot_df[plot_df$Summit == PeakIter, ]
 
     ModelMean <- brms::brm(formula = mean ~ Year, data = Iter_df)
@@ -497,7 +498,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
     modelplot_df$StatSig[i] <- StatSig$Sig[intersect(which(StatSig$Outcome == modelplot_df$Outcome[i]), which(StatSig$Summit == modelplot_df$Summit[i]))]
   }
   modelplot_df$col <- ifelse(modelplot_df$StatSig, "green", "red")
-  modelplot_df$fill <- ifelse(modelplot_df$Summit == "ALL", "#480472", "#535353")
+  modelplot_df$fill <- ifelse(modelplot_df$Summit == "ALL", "#156082", "#535353")
 
   BMean_gg <-
     ggplot(
@@ -508,7 +509,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
       )
     ) +
     stat_halfeye(aes(fill = fill)) +
-    scale_fill_manual(values = c("#480472", "#535353")) +
+    scale_fill_manual(values = c("#156082", "#535353")) +
     geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
     scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
     geom_vline(xintercept = 0) +
@@ -525,7 +526,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
       )
     ) +
     stat_halfeye(aes(fill = fill)) +
-    scale_fill_manual(values = c("#480472", "#535353")) +
+    scale_fill_manual(values = c("#156082", "#535353")) +
     geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
     scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
     geom_vline(xintercept = 0) +
@@ -572,7 +573,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
     ## map
     map_gg <- KrigR::Plot.SpatRast(EndAr - BeginAr,
       Dates = paste0("AR ", k, " Difference (", Var, ")"), SF = eightks_sf, Shape = 2, Size = 3,
-      Legend = paste("AR", k)
+      Legend = paste("AR")
     ) +
       ggrepel::geom_text_repel(
         data = summits_df[summits_df$HEIGHTM >= 8000, ],
@@ -604,7 +605,7 @@ ClimChange_ls <- for (i in 1:length(Data_ls)) {
 
   map_gg <- Plot.SpatRast(do.call(c, lapply(Predcitability_ls, "[[", "Map")),
     Dates = paste0("AR ", c(1, 2, 3, 5, 10), " Difference (", Var, ")"), SF = eightks_sf, Shape = 2, Size = 3,
-    Legend = paste("AR", k),
+    Legend = "AR",
     ncol = 1
   ) +
     ggrepel::geom_text_repel(
@@ -634,10 +635,10 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
   if (!dir.exists(Dir.Var)) {
     dir.create(Dir.Var)
   }
-  FName <- file.path(Dir.Var, paste0("Extremes_", sub(" \\[.*", "", Variables_vec[VarI]), ".png"))
+  FName <- file.path(Dir.Var, paste0("Seasons_", sub(" \\[.*", "", Variables_vec[VarI]), ".png"))
   print(FName)
 
-  if (file.exists(paste0(tools::file_path_sans_ext(FName), "_Length.png"))) {
+  if (file.exists(paste0(tools::file_path_sans_ext(FName), "_LengthUpper.png"))) {
     next()
   }
 
@@ -656,10 +657,10 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
     MeanAnnual <- terra::tapp(data_rast, index = as.numeric(substr(time(data_rast), 1, 4)), fun = mean, na.rm = TRUE)
     SDAnnual <- terra::tapp(data_rast, index = as.numeric(substr(time(data_rast), 1, 4)), fun = sd, na.RM = TRUE)
     time(MeanAnnual) <- time(SDAnnual) <- as.POSIXct(paste0(unique(as.numeric(substr(time(data_rast), 1, 4))), "-01-01"))
-    Var <- VNames_vec[[i]]
+    Var <- VNames_vec[VarI]
 
     ## Analyse change in region by 2-decade-intervals
-    Climchange_df <- data.frame(
+    plot_df <- Climchange_df <- data.frame(
       Values = c(
         as.vector(terra::values(MeanAnnual[[1:20]])),
         as.vector(terra::values(MeanAnnual[[(nlyr(MeanAnnual) - 19):nlyr(MeanAnnual)]]))
@@ -684,7 +685,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
     )
     climatechange_region <- ggplot(plot_df, aes(x = Year, y = mean)) +
       geom_point() +
-      stat_smooth(method = "lm") +
+      geom_smooth(method = "lm", fill = "#156082", col = "#156082") +
       theme_bw() +
       labs(y = paste("Annual", Var, "Mean"))
 
@@ -734,7 +735,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
 
     ### Line plots of trends at summits
     Mean_gg <- ggplot(plot_df, aes(x = Year, y = mean)) +
-      geom_smooth(method = "lm", fill = "#480472", col = "#480472") +
+      geom_smooth(method = "lm", fill = "#156082", col = "#156082") +
       geom_smooth(aes(group = Summit), col = "#535353", method = "lm", alpha = 0.2) +
       geom_label_repel(
         data = labelInfo,
@@ -749,7 +750,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
       labs(y = "Mean")
 
     SD_gg <- ggplot(plot_df, aes(x = Year, y = sd)) +
-      geom_smooth(method = "lm", fill = "#480472", col = "#480472") +
+      geom_smooth(method = "lm", fill = "#156082", col = "#156082") +
       geom_smooth(aes(group = Summit), col = "#535353", method = "lm", alpha = 0.2) +
       geom_label_repel(
         data = labelInfo,
@@ -778,14 +779,11 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
     )
 
     Peaks_gg <- lapply(unique(plot_df$Summit), function(PeakIter) {
+      message(PeakIter)
       Iter_df <- plot_df[plot_df$Summit == PeakIter, ]
 
       ModelMean <- brms::brm(formula = mean ~ Year, data = Iter_df)
       ModelSD <- brms::brm(formula = sd ~ Year, data = Iter_df)
-      modelplot_df <- data.frame(
-        Mean = unlist(lapply(brms::as_draws(ModelMean), "[[", "b_Year")),
-        SD = unlist(lapply(brms::as_draws(ModelSD), "[[", "b_Year"))
-      )
 
       modelplot_df <- data.frame(
         Value = c(
@@ -807,7 +805,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
       modelplot_df$StatSig[i] <- StatSig$Sig[intersect(which(StatSig$Outcome == modelplot_df$Outcome[i]), which(StatSig$Summit == modelplot_df$Summit[i]))]
     }
     modelplot_df$col <- ifelse(modelplot_df$StatSig, "green", "red")
-    modelplot_df$fill <- ifelse(modelplot_df$Summit == "ALL", "#480472", "#535353")
+    modelplot_df$fill <- ifelse(modelplot_df$Summit == "ALL", "#156082", "#535353")
     SummitsChangemodelplot_df <- modelplot_df
 
     BMean_gg <-
@@ -819,7 +817,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
         )
       ) +
       stat_halfeye(aes(fill = fill)) +
-      scale_fill_manual(values = c("#480472", "#535353")) +
+      scale_fill_manual(values = c("#156082", "#535353")) +
       geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
       scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
       geom_vline(xintercept = 0) +
@@ -836,7 +834,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
         )
       ) +
       stat_halfeye(aes(fill = fill)) +
-      scale_fill_manual(values = c("#480472", "#535353")) +
+      scale_fill_manual(values = c("#156082", "#535353")) +
       geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
       scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
       geom_vline(xintercept = 0) +
@@ -880,7 +878,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
       ## map
       map_gg <- KrigR::Plot.SpatRast(EndAr - BeginAr,
         Dates = paste0("AR ", k, " Difference (", Var, ")"), SF = eightks_sf, Shape = 2, Size = 3,
-        Legend = paste("AR", k)
+        Legend = "AR"
       ) +
         ggrepel::geom_text_repel(
           data = summits_df[summits_df$HEIGHTM >= 8000, ],
@@ -912,7 +910,7 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
 
     map_gg <- Plot.SpatRast(do.call(c, lapply(Predcitability_ls, "[[", "Map")),
       Dates = paste0("AR ", c(1, 2, 3, 5, 10), " Difference (", Var, ")"), SF = eightks_sf, Shape = 2, Size = 3,
-      Legend = paste("AR", k),
+      Legend = paste("AR"),
       ncol = 1
     ) +
       ggrepel::geom_text_repel(
@@ -970,180 +968,247 @@ for (VarI in 1:length(Seasons_ls[[1]])) {
     )
     ### Line plots of trends at summits
     Quant_ls <- lapply(unique(plot_df$Quantile), FUN = function(QuanIter) {
-      # print(QuanIter)
-      Iter_df <- Iter_df <- plot_df[plot_df$Quantile == QuanIter, ]
+      # QuanIter = unique(plot_df$Quantile)[2]
+      print(QuanIter)
+      Iter_df <- plot_df[plot_df$Quantile == QuanIter, ]
+      Iter_df$Length[is.na(Iter_df$Length)] <- 0
       labelInfo <- split(Iter_df, Iter_df$Peak)
-labelInfo <- lapply(labelInfo, function(dat) {
-    ELabel <- predict(lm(Exceeded ~ Year, data = dat), newdata = data.frame(Year = max(dat$Year)))
-    LLabel <- predict(lm(Length ~ Year, data = dat), newdata = data.frame(Year = max(dat$Year)))
-    summit <- unique(dat$Peak)
-    data.frame(ELabel = ELabel, LLabel = LLabel, Summit = summit)
-})
-labelInfo <- do.call(rbind, labelInfo)
+      labelInfo <- lapply(labelInfo, function(dat) {
+        ELabel <- predict(lm(Exceeded ~ Year, data = dat), newdata = data.frame(Year = max(dat$Year)))
+        LLabel <- predict(lm(Length ~ Year, data = dat), newdata = data.frame(Year = max(dat$Year)))
+        summit <- unique(dat$Peak)
+        data.frame(ELabel = ELabel, LLabel = LLabel, Summit = summit)
+      })
+      labelInfo <- do.call(rbind, labelInfo)
 
-ELine_gg <- ggplot(Iter_df, aes(x = Year, y = Exceeded)) +
-    geom_smooth(aes(group = Peak), col = "#535353", method = "lm", alpha = 0.2) +
-    geom_smooth(method = "lm", fill = "#480472", col = "#480472") +
-    geom_label_repel(
-        data = labelInfo,
-        aes(
+      Iter_df$Length[Iter_df$Length == 0] <- NA
+
+      ELine_gg <- ggplot(Iter_df, aes(x = Year, y = Exceeded)) +
+        geom_smooth(aes(group = Peak), col = "#535353", method = "lm", alpha = 0.2) +
+        geom_smooth(method = "lm", fill = "#156082", col = "#156082") +
+        geom_label_repel(
+          data = labelInfo[labelInfo$ELabel != 0, ],
+          aes(
             x = max(Iter_df$Year), y = ELabel,
             label = Summit
-        ),
-        color = "#535353",
-        nudge_x = 7
-    ) +
-    theme_bw() +
-    labs(x = "Year", y = "# Days Exceeding Quantile Bounds", title = paste(SeasonName, QuanIter, "Quantile")) +
-    expand_limits(y = 0)
+          ),
+          color = "#535353",
+          nudge_x = 7
+        ) +
+        theme_bw() +
+        labs(x = "Year", y = "# Days Exceeding Quantile Bounds", title = paste(SeasonName, QuanIter, "Quantile")) +
+        expand_limits(y = 0)
 
-LLine_gg <- ggplot(Iter_df, aes(x = Year, y = Length)) +
-    geom_smooth(aes(group = Peak), col = "#535353", method = "lm", alpha = 0.2) +
-    geom_smooth(method = "lm", fill = "#480472", col = "#480472") +
-    geom_label_repel(
-        data = labelInfo,
-        aes(
+      LLine_gg <- ggplot(Iter_df, aes(x = Year, y = Length)) +
+        geom_smooth(aes(group = Peak), col = "#535353", method = "lm", alpha = 0.2) +
+        geom_smooth(method = "lm", fill = "#156082", col = "#156082") +
+        geom_label_repel(
+          data = labelInfo[labelInfo$LLabel != 0, ],
+          aes(
             x = max(Iter_df$Year), y = LLabel,
             label = Summit
-        ),
-        color = "#535353",
-        nudge_x = 7
-    ) +
-    theme_bw() +
-    labs(x = "Year", y = "Continuous Days Exceeding Quantile Bounds", title = paste(SeasonName, QuanIter, "Quantile")) +
-    expand_limits(y = 0)
+          ),
+          color = "#535353",
+          nudge_x = 7
+        ) +
+        theme_bw() +
+        labs(x = "Year", y = "Continuous Days Exceeding Quantile Bounds", title = paste(SeasonName, QuanIter, "Quantile")) +
+        expand_limits(y = 0)
 
       ### BRMS models of trends at all summits and indvidual summits
       Big_df$Exceeded <- as.numeric(data.frame(Big_df)[, ifelse(QuanIter == "0.05", "Lower", "Upper")])
       ModelExceeded <- brms::brm(formula = Exceeded ~ time, data = Big_df, family = bernoulli(link = "logit")) # this really should be each day 0 or 1 for extreme or not
       run_lengths_df <- Big_df %>% # calculate length of each exceeding run (multiple per year)
-        group_by(time) %>% 
-  arrange(time) %>%
-  summarise(runs = list({
-    r <- rle(Exceeded)
-    lengths <- r$lengths[r$values == TRUE]
-    if (length(lengths) == 0) NA else lengths
-  })) %>%
-  unnest_longer(runs) %>%
-  filter(!is.na(runs))
-ModelLength <- brms::brm(formula = runs ~ time, data = run_lengths_df, family = "poisson")
+        group_by(time) %>%
+        arrange(time) %>%
+        summarise(runs = list({
+          r <- rle(Exceeded)
+          lengths <- r$lengths[r$values == TRUE]
+          if (length(lengths) == 0) NA else lengths
+        })) %>%
+        unnest_longer(runs) %>%
+        filter(!is.na(runs))
+      ModelLength <- brms::brm(formula = runs ~ time, data = run_lengths_df, family = "poisson")
 
-modelplot_df <- data.frame(
-    Value = c(
-        unlist(lapply(brms::as_draws(ModelExceeded), "[[", "b_time")),
-        unlist(lapply(brms::as_draws(ModelLength), "[[", "b_time"))
-    ),
-    Outcome = rep(c("Exceeded", "Length"), each = length(as_draws(ModelExceeded)[[1]][[1]]) * length(as_draws(ModelExceeded))),
-    Summit = "ALL"
-)
+      modelplot_df <- data.frame(
+        Value = c(
+          unlist(lapply(brms::as_draws(ModelExceeded), "[[", "b_time")),
+          unlist(lapply(brms::as_draws(ModelLength), "[[", "b_time"))
+        ),
+        Outcome = rep(c("Exceeded", "Length"), each = length(as_draws(ModelExceeded)[[1]][[1]]) * length(as_draws(ModelExceeded))),
+        Summit = "ALL"
+      )
 
-Peaks_gg <- lapply(unique(Big_df$name), function(PeakIter) {
-    message(PeakIter)
-    message(QuanIter)
-    message(SeasonName)
+      Peaks_gg <- lapply(unique(Big_df$name), function(PeakIter) {
+        # PeakIter = unique(Big_df$name)[9]
+        message(PeakIter)
+        message(QuanIter)
+        message(SeasonName)
 
-    Peak_df <- Big_df[Big_df$name == PeakIter, ]
-    run_lengths_df <- Peak_df %>% # calculate length of each exceeding run (multiple per year)
-  group_by(time) %>% 
-  arrange(time) %>%
-  summarise(runs = list({
-    r <- rle(Exceeded)
-    lengths <- r$lengths[r$values == TRUE]
-    if (length(lengths) == 0) NA else lengths
-  })) %>%
-  unnest_longer(runs) %>%
-  filter(!is.na(runs))
+        Peak_df <- Big_df[Big_df$name == PeakIter, ]
+        run_lengths_df <- Peak_df %>% # calculate length of each exceeding run (multiple per year)
+          group_by(time) %>%
+          arrange(time) %>%
+          summarise(runs = list({
+            r <- rle(Exceeded)
+            lengths <- r$lengths[r$values == TRUE]
+            if (length(lengths) == 0) NA else lengths
+          })) %>%
+          unnest_longer(runs) %>%
+          filter(!is.na(runs))
 
-    if (sum(Peak_df$Exceeded != 0) > 3) {
+        if (sum(Peak_df$Exceeded != 0) > 3) {
           E_BRM <- brms::brm(formula = Exceeded ~ time, data = Peak_df, family = bernoulli(link = "logit")) # this really should be each day 0 or 1 for extreme or not
-          Exceeded <- exp(unlist(lapply(brms::as_draws(E_BRM), "[[", "b_time")))
+          Exceeded <- unlist(lapply(brms::as_draws(E_BRM), "[[", "b_time"))
         } else {
           Exceeded <- rep(NA, 4000)
         }
-        if (nrow(run_lengths_df)>3) {
-          L_BRM <- exp(brms::brm(formula = runs ~ time, data = run_lengths_df, family = "poisson"))
+        if (nrow(run_lengths_df) > 3) {
+          L_BRM <- brms::brm(formula = runs ~ time, data = run_lengths_df, family = "poisson")
           Length <- unlist(lapply(brms::as_draws(L_BRM), "[[", "b_time"))
         } else {
           Length <- rep(NA, 4000)
         }
 
-      data.frame(
-      Value = c(
-        Exceeded,
-        Length
-      ),
-      Outcome = c(rep("Exceeded", length(Exceeded)), rep("Length", length(Length))),
-      Summit = PeakIter
+        data.frame(
+          Value = c(
+            Exceeded,
+            Length
+          ),
+          Outcome = c(rep("Exceeded", length(Exceeded)), rep("Length", length(Length))),
+          Summit = PeakIter
         )
-})
-names(Peaks_gg) <- unique(Iter_df$Peak)
+      })
+      names(Peaks_gg) <- unique(Iter_df$Peak)
 
-Peaks_gg <- do.call(rbind, Peaks_gg)
-modelplot_df <- rbind(modelplot_df, Peaks_gg)
-StatSig <- aggregate(Value ~ Summit + Outcome, modelplot_df, FUN = quantile, c(0.05, 0.95))
-StatSig$Direction <- sign(StatSig$Value[, 1]) + sign(StatSig$Value[, 2])
-StatSig$Sig <- abs(StatSig$Direction) == 2
-modelplot_df$StatSig <- NA
-for (i in 1:nrow(modelplot_df)) {
-    modelplot_df$StatSig[i] <- StatSig$Sig[intersect(which(StatSig$Outcome == modelplot_df$Outcome[i]), which(StatSig$Summit == modelplot_df$Summit[i]))]
-}
-modelplot_df$col <- ifelse(modelplot_df$StatSig, "green", "red")
-modelplot_df$fill <- ifelse(modelplot_df$Summit == "ALL", "#480472", "#535353")
+      Peaks_gg <- do.call(rbind, Peaks_gg)
+      modelplot_df <- rbind(modelplot_df, Peaks_gg)
+      StatSig <- aggregate(Value ~ Summit + Outcome, modelplot_df, FUN = quantile, c(0.05, 0.95))
+      StatSig$Direction <- sign(StatSig$Value[, 1]) + sign(StatSig$Value[, 2])
+      StatSig$Sig <- abs(StatSig$Direction) == 2
+      modelplot_df$StatSig <- NA
+      for (i in 1:nrow(modelplot_df)) {
+        if (length(which(StatSig$Summit == modelplot_df$Summit[i])) == 0) {
+          modelplot_df$StatSig[i] <- FALSE
+        } else {
+          modelplot_df$StatSig[i] <- StatSig$Sig[intersect(which(StatSig$Outcome == modelplot_df$Outcome[i]), which(StatSig$Summit == modelplot_df$Summit[i]))]
+        }
+      }
+      modelplot_df$col <- ifelse(modelplot_df$StatSig, "green", "red")
+      modelplot_df$fill <- ifelse(modelplot_df$Summit == "ALL", "#156082", "#535353")
 
-BExceeded_gg <-
-    ggplot(
-        modelplot_df[modelplot_df$Outcome == "Exceeded", ],
-        aes(
+      BExceeded_gg <-
+        ggplot(
+          modelplot_df[modelplot_df$Outcome == "Exceeded", ],
+          aes(
             y = factor(Summit, levels = rev(c("ALL", rev(labelInfo$Summit[order(labelInfo$ELabel)])))),
             x = Value
-        )
-    ) +
-    stat_halfeye(aes(fill = fill)) +
-    scale_fill_manual(values = c("#480472", "#535353")) +
-    geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
-    scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
-    geom_vline(xintercept = 0) +
-    theme_bw() +
-    theme(legend.position = "none") +
-    labs(x = "BRMS Model Coefficient Posterior Samples", y = "")
+          )
+        ) +
+        stat_halfeye(aes(fill = fill)) +
+        scale_fill_manual(values = c("#156082", "#535353")) +
+        geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
+        scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
+        geom_vline(xintercept = 0) +
+        theme_bw() +
+        theme(legend.position = "none") +
+        labs(x = "BRMS Model Coefficient Posterior Samples", y = "")
 
-BLength_gg <-
-    ggplot(
-        modelplot_df[modelplot_df$Outcome == "Length", ],
-        aes(
+      BLength_gg <-
+        ggplot(
+          modelplot_df[modelplot_df$Outcome == "Length", ],
+          aes(
             y = factor(Summit, levels = rev(c("ALL", rev(labelInfo$Summit[order(labelInfo$LLabel)])))),
             x = Value
-        )
-    ) +
-    stat_halfeye(aes(fill = fill)) +
-    scale_fill_manual(values = c("#480472", "#535353")) +
-    geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
-    scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
-    geom_vline(xintercept = 0) +
-    theme_bw() +
-    theme(legend.position = "none") +
-    labs(x = "BRMS Model Coefficient Posterior Samples", y = "")
+          )
+        ) +
+        stat_halfeye(aes(fill = fill)) +
+        scale_fill_manual(values = c("#156082", "#535353")) +
+        geom_boxplot(aes(col = col), width = 0.3, lwd = 1.1) +
+        scale_color_manual(values = c("#003b05", "#5c0000"), breaks = c("green", "red")) +
+        geom_vline(xintercept = 0) +
+        theme_bw() +
+        theme(legend.position = "none") +
+        labs(x = "BRMS Model Coefficient Posterior Samples", y = "")
 
-SummitsExceeded_gg <- plot_grid(ELine_gg, BExceeded_gg, ncol = 2)
-SummitsLength_gg <- plot_grid(LLine_gg, BLength_gg, ncol = 2)
+      SummitsExceeded_gg <- plot_grid(ELine_gg, BExceeded_gg, ncol = 2)
+      SummitsLength_gg <- plot_grid(LLine_gg, BLength_gg, ncol = 2)
 
-## return plots
-list(
-  Predictability = Predictability_gg,
-  Exceeded = SummitsExceeded_gg,
-  Length = SummitsLength_gg,
-)
-      }) # quantile loop
-      names(Quant_ls) <- unique(plot_df$Quantile)
+      ## return plots
+      list(
+        Predictability = Predictability_gg,
+        Exceeded = SummitsExceeded_gg,
+        Length = SummitsLength_gg
+      )
+    }) # quantile loop
+    names(Quant_ls) <- unique(plot_df$Quantile)
 
-      list(ClimChange = climchange_gg,
+    list(
+      ClimChange = climchange_gg,
       Mean = SummitsMean_gg,
       SD = SummitsSD_gg,
       Quants = Quant_ls
-      )
+    )
   }) # season loop
-  stop("Fuse and export plots")
-  FName
+  names(Seasons_ggs) <- names(Seasons_ls)
+
+  ggsave(
+    plot_grid(
+      plotlist = lapply(Seasons_ggs, "[[", "ClimChange"), nrow = 2, labels = ""
+    ), # names(Seasons_ggs),
+    filename = paste0(tools::file_path_sans_ext(FName), "_RegionClimChange.png"),
+    width = 45, height = 30, units = "cm"
+  )
+
+  ggsave(plot_grid(plotlist = lapply(Seasons_ggs, "[[", "Mean"), nrow = 2, labels = ""),
+    filename = paste0(tools::file_path_sans_ext(FName), "_SummitsMean.png"),
+    width = 32 * 1.2, height = 22 * 1.2, units = "cm"
+  )
+
+  ggsave(plot_grid(plotlist = lapply(Seasons_ggs, "[[", "SD"), nrow = 2, labels = ""),
+    filename = paste0(tools::file_path_sans_ext(FName), "_SummitsSD.png"),
+    width = 32 * 1.2, height = 22 * 1.2, units = "cm"
+  )
+
+  ggsave(
+    plot_grid(plotlist = lapply(lapply(Seasons_ggs, "[[", "Quants"), FUN = function(x) {
+      lapply(x, "[[", "Predictability")[[1]]
+    }), nrow = 1, labels = ""),
+    filename = paste0(tools::file_path_sans_ext(FName), "_Predictability.png"),
+    width = 70, height = 33, units = "cm"
+  )
+
+  ggsave(
+    plot_grid(plotlist = lapply(lapply(Seasons_ggs, "[[", "Quants"), FUN = function(x) {
+      lapply(x, "[[", "Exceeded")[[1]]
+    }), nrow = 2, labels = ""),
+    filename = paste0(tools::file_path_sans_ext(FName), "_ExceededLower.png"),
+    width = 32 * 1.2, height = 22 * 1.2, units = "cm"
+  )
+
+  ggsave(
+    plot_grid(plotlist = lapply(lapply(Seasons_ggs, "[[", "Quants"), FUN = function(x) {
+      lapply(x, "[[", "Exceeded")[[2]]
+    }), nrow = 2, labels = ""),
+    filename = paste0(tools::file_path_sans_ext(FName), "_ExceededUpper.png"),
+    width = 32 * 1.2, height = 22 * 1.2, units = "cm"
+  )
+
+  ggsave(
+    plot_grid(plotlist = lapply(lapply(Seasons_ggs, "[[", "Quants"), FUN = function(x) {
+      lapply(x, "[[", "Length")[[1]]
+    }), nrow = 2, labels = ""),
+    filename = paste0(tools::file_path_sans_ext(FName), "_LengthLower.png"),
+    width = 32 * 1.2, height = 22 * 1.2, units = "cm"
+  )
+
+  ggsave(
+    plot_grid(plotlist = lapply(lapply(Seasons_ggs, "[[", "Quants"), FUN = function(x) {
+      lapply(x, "[[", "Length")[[2]]
+    }), nrow = 2, labels = ""),
+    filename = paste0(tools::file_path_sans_ext(FName), "_LengthUpper.png"),
+    width = 32 * 1.2, height = 22 * 1.2, units = "cm"
+  )
 } # variable loop
 
 
@@ -1376,7 +1441,8 @@ Extract_df <- pbapply(Expeditions_df, MARGIN = 1, FUN = function(ExIter) {
       "mean" = mean(as.numeric(VarTime)),
       "sd" = sd(as.numeric(VarTime)),
       "ExtremeLow" = sum(VarTime < Bounds_df$Values[Bounds_df$Bounds == "L"]),
-      "ExtremeHigh" = sum(VarTime > Bounds_df$Values[Bounds_df$Bounds == "U"])
+      "ExtremeHigh" = sum(VarTime > Bounds_df$Values[Bounds_df$Bounds == "U"]),
+      "Season" = Season
     )
     colnames(df1) <- paste(VarName, colnames(df1), sep = "_")
     df1
@@ -1388,7 +1454,73 @@ Expeditions_Export <- cbind(Expeditions_df, do.call(rbind, Extract_df))
 write.csv(Expeditions_Export, file = file.path(Dir.Exports, "ModelData.csv"))
 head(Expeditions_Export)
 
-stop("Ready for Chris")
+post_df <- aggregate(Windspeed_Season == "Post" ~ YEAR, Expeditions_Export, FUN = sum)
+colnames(post_df) <- c("Year", "Count")
+post_df$Total <- table(Expeditions_Export$YEAR)
+post_df$Proportion <- post_df$Count/post_df$Total
+
+BarTime <- ggplot(post_df, aes(x = factor(Year), y = Total)) + 
+geom_bar(stat = "identity", fill = "#156082") + theme_bw() +
+labs(y = paste("Number of Expeditions on Mountains >8,000 masl"), x = "Year") +
+geom_label_repel(aes(label = Total),
+                  box.padding   = 0.35, 
+                  point.padding = 0.5,
+                  segment.color = 'grey50')
+
+ggsave(BarTime, 
+  filename = file.path(Dir.Exports, "BarTime.png"),
+  width = 26, height = 8
+)
+
+SeasonsExpeds <- ggplot(post_df, aes(x = Year, y = Proportion)) + 
+geom_point() + 
+geom_label_repel(aes(label = Total),
+                  box.padding   = 0.35, 
+                  point.padding = 0.5,
+                  segment.color = 'grey50') + 
+geom_smooth(method = "loess", fill = "#156082", col = "#156082") +
+    theme_bw() +
+    labs(y = paste("Proportion of Post-Monsoon Season Expeditions"), x = "Year") 
+
+ggsave(SeasonsExpeds, 
+  filename = file.path(Dir.Exports, "SeasonsExpeds .png"),
+  width = 26, height = 8
+)
+
+post_df <- aggregate(STORM ~ YEAR+Windspeed_Season, Expeditions_Export, FUN = sum)
+colnames(post_df) <- c("Year", "Season", "Count")
+Expeditions_Export$Dummy = 1
+post_df$Total <- aggregate(Dummy ~ YEAR+Windspeed_Season, Expeditions_Export, FUN = sum)[,3]
+post_df$Proportion <- post_df$Count/post_df$Total
+
+Storm_df <- post_df
+Storm_df$Condition = "STORM"
+
+
+post_df <- aggregate(AVALANCHE ~ YEAR+Windspeed_Season, Expeditions_Export, FUN = sum)
+colnames(post_df) <- c("Year", "Season", "Count")
+Expeditions_Export$Dummy = 1
+post_df$Total <- aggregate(Dummy ~ YEAR+Windspeed_Season, Expeditions_Export, FUN = sum)[,3]
+post_df$Proportion <- post_df$Count/post_df$Total
+post_df$Condition = "AVALANCHE"
+
+AVASTORMS <- ggplot(rbind(Storm_df, post_df), aes(x = Year, y = Proportion)) + 
+geom_point() + 
+geom_label_repel(aes(label = Total),
+                  box.padding   = 0.1, 
+                  max.overlaps = 30,
+                  segment.color = 'grey50') + 
+facet_grid(factor(Condition, levels = c("STORM", "AVALANCHE")) ~factor(Season, levels = c("Pre", "Post"))) + 
+geom_smooth(fill = "#156082", col = "#156082") +
+    theme_bw() +
+    labs(y = paste("Proportion of Expeditions per Season Reporting Hazard Events")) 
+    # + 
+    # lims(y = c(0, 1))
+
+ggsave(AVASTORMS, 
+  filename = file.path(Dir.Exports, "AVALANCHES_STORMS .png"),
+  width = 22*1.2, height = 8*1.2
+)
 
 # KRIGING =================================================================
 message("#### Kriging Showcase ############################################")

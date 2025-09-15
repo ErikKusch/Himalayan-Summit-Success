@@ -65,3 +65,12 @@ desktop.ini
 .megaignore
 Rubbish/*
 Covariates/COP30.tif
+
+!Exports/2m_temperature/*.png
+
+*/DEMO_*
+Exports/peaks_time_series.csv
+1 - Climate Data.r
+2025-04-30_High Hopes and Broken Dreams - The interplay of climate change, natural hazards, and the mortality of high mountain expeditions in the Nepal.mp4
+2025-04-30_High Hopes and Broken Dreams - The interplay of climate change, natural hazards, and the mortality of high mountain expeditions in the Nepal.pptx
+2025-04-30_High Hopes and Broken Dreams - The interplay of climate change, natural hazards, and the mortality of high mountain expeditions in the Nepal.pdf
