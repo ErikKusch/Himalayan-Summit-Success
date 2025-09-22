@@ -180,6 +180,7 @@ if (!file.exists(file.path(Dir.Data, "windspeed.nc"))) {
 } else {
     CDSData_ls$windspeed <- rast(file.path(Dir.Data, "windspeed.nc"))
 }
+varnames(CDSData_ls$windspeed) <- "windspeed"
 
 ## Data Subsetting -------------------------------------------------
 CDSData_ls <- CDSData_ls[SubsetVariables_vec]
@@ -410,17 +411,109 @@ if (file.exists(file.path(Dir.Exports, "ModelData.csv"))) {
 }
 
 # C. ANALYSES & VISUALISATION =============================================
+sapply(file.path(Dir.Exports, names(CDSData_ls)), dir.create, showWarnings = FALSE) # create folders for climate variable visualizations
+
+symmetric_range <- function(x) {
+    max_abs <- max(abs(range(x, na.rm = TRUE)))
+    c(-max_abs, max_abs)
+}
 
 ## Entire Region ---------------------------------------------------
 ### Climate Change -------
+message("Climate Change Visualizations for the Full Region...")
+GG_ClimChangeRegion_ls <- lapply(CDSData_ls, FUN = function(RasterIter) {
+    LegendTitle <- climate_vars$display[climate_vars$name == varnames(RasterIter)]
+    ClimateChangeTitle <- gsub("\\s*\\[.*?\\]", "", climate_vars$display[climate_vars$name == varnames(RasterIter)])
+
+    print(paste("                                            ...", LegendTitle))
+
+    StartMean <- mean(RasterIter[[format(time(RasterIter), "%Y") %in% head(unique(format(time(RasterIter), "%Y")), 20)]])
+    StopMean <- mean(RasterIter[[format(time(RasterIter), "%Y") %in% tail(unique(format(time(RasterIter), "%Y")), 20)]])
+
+    ClimateChange_gg <- ggplot() +
+        geom_spatraster(data = StopMean - StartMean) +
+        geom_sf(data = sevenks_sf, shape = 2, colour = "white") +
+        ggrepel::geom_text_repel(
+            data = summits_df[summits_df$HEIGHTM >= 8000, ],
+            aes(x = LON, y = LAT, label = PKNAME),
+            max.overlaps = 30,
+            colour = "white"
+        ) +
+        scale_fill_gradient2(
+            low = "cyan",
+            mid = "grey30",
+            high = "red",
+            midpoint = 0,
+            limits = symmetric_range(values(StopMean - StartMean)), # This ensures symmetric color scale
+            name = LegendTitle
+        ) +
+        labs(
+            x = "Longitude",
+            y = "Latitude",
+            title = paste(ClimateChangeTitle, "Change Between First and Last 20 Years on Record"),
+        ) +
+        theme(
+            legend.position = "bottom",
+            legend.direction = "horizontal",
+            legend.key.width = unit(2, "cm"),
+            legend.key.height = unit(0.5, "cm"),
+            panel.background = element_rect(fill = "#2c2c2c", color = "#2c2c2c")
+        )
+
+
+    Boxplot_df <- rbind(
+        data.frame(
+            Values = values(StartMean)[, 1],
+            Time = "Beginning"
+        ),
+        data.frame(
+            Values = values(StopMean)[, 1],
+            Time = "Ending"
+        )
+    )
+
+    Boxplot_gg <- ggplot(Boxplot_df, aes(x = Time, y = Values)) +
+        geom_violin() +
+        geom_boxplot(width = 0.05) +
+        stat_compare_means(comparisons = list(c("Beginning", "Ending")), paired = TRUE) +
+        theme_bw() +
+        scale_x_discrete(labels = c(
+            "Beginning" = paste(head(unique(format(time(RasterIter), "%Y")), 20)[1], "-", tail(head(unique(format(time(RasterIter), "%Y")), 20), 1)),
+            "Ending" = paste(tail(unique(format(time(RasterIter), "%Y")), 20)[1], "-", tail(tail(unique(format(time(RasterIter), "%Y")), 20), 1))
+        )) +
+        labs(x = "Time-Windows", y = LegendTitle)
+
+    cowplot::plot_grid(ClimateChange_gg, Boxplot_gg, ncol = 2, rel_widths = c(1.7, 1))
+})
+names(GG_ClimChangeRegion_ls) <- names(CDSData_ls)
+
+lapply(names(GG_ClimChangeRegion_ls), FUN = function(var) {
+    ggsave(
+        filename = file.path(Dir.Exports, var, paste0("ClimateChange_", var, ".png")),
+        plot = GG_ClimChangeRegion_ls[[var]],
+        width = 16 * 2, height = 8 * 2, units = "cm"
+    )
+})
+
+
+
+
 ### Predictability -------
+stop("cleaned to here - remake plots and models")
 
 ## Summits ---------------------------------------------------------
+
+
+
 ### Climate Change -------
+peaks_ts_df
 ### Predictability -------
+pred_df
 ### Extremes -------
+peaks_ts_df
 
 ## Humans ----------------------------------------------------------
+ModelData_df
 ### Expeditions over Time -------
 ### Summit Bid Window -------
 ### Mortality -------
@@ -434,7 +527,7 @@ if (file.exists(file.path(Dir.Exports, "ModelData.csv"))) {
 
 
 
-stop("cleaned to here - remake plots and models")
+
 post_df <- aggregate(Windspeed_Season == "Post" ~ YEAR, ModelData_df, FUN = sum)
 colnames(post_df) <- c("Year", "Count")
 post_df$Total <- table(ModelData_df$YEAR)
