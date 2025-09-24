@@ -419,9 +419,12 @@ symmetric_range <- function(x) {
 }
 
 ## Entire Region ---------------------------------------------------
+stop("No need to run all viz at this point")
+
 ### Climate Change -------
 message("Climate Change Visualizations for the Full Region...")
 GG_ClimChangeRegion_ls <- lapply(CDSData_ls, FUN = function(RasterIter) {
+    # RasterIter <- CDSData_ls[[1]]
     LegendTitle <- climate_vars$display[climate_vars$name == varnames(RasterIter)]
     ClimateChangeTitle <- gsub("\\s*\\[.*?\\]", "", climate_vars$display[climate_vars$name == varnames(RasterIter)])
 
@@ -429,6 +432,33 @@ GG_ClimChangeRegion_ls <- lapply(CDSData_ls, FUN = function(RasterIter) {
 
     StartMean <- mean(RasterIter[[format(time(RasterIter), "%Y") %in% head(unique(format(time(RasterIter), "%Y")), 20)]])
     StopMean <- mean(RasterIter[[format(time(RasterIter), "%Y") %in% tail(unique(format(time(RasterIter), "%Y")), 20)]])
+
+    Currentday_gg <- ggplot() +
+        geom_spatraster(data = StopMean) +
+        geom_sf(data = sevenks_sf, shape = 2, colour = "white") +
+        ggrepel::geom_text_repel(
+            data = summits_df[summits_df$HEIGHTM >= 8000, ],
+            aes(x = LON, y = LAT, label = PKNAME),
+            max.overlaps = 30,
+            colour = "white"
+        ) +
+        scale_fill_viridis_c(
+            option = "C",
+            name = LegendTitle,
+            guide = guide_colourbar(title.vjust = 0.75)
+        ) +
+        labs(
+            x = "Longitude",
+            y = "Latitude",
+            title = paste("Average", ClimateChangeTitle, "During the Last 20 Years on Record"),
+        ) +
+        theme(
+            legend.position = "bottom",
+            legend.direction = "horizontal",
+            legend.key.width = unit(2, "cm"),
+            legend.key.height = unit(1, "cm"),
+            panel.background = element_rect(fill = "#2c2c2c", color = "#2c2c2c")
+        )
 
     ClimateChange_gg <- ggplot() +
         geom_spatraster(data = StopMean - StartMean) +
@@ -445,7 +475,8 @@ GG_ClimChangeRegion_ls <- lapply(CDSData_ls, FUN = function(RasterIter) {
             high = "red",
             midpoint = 0,
             limits = symmetric_range(values(StopMean - StartMean)), # This ensures symmetric color scale
-            name = LegendTitle
+            name = paste("Δ", LegendTitle),
+            guide = guide_colourbar(title.vjust = 0.75)
         ) +
         labs(
             x = "Longitude",
@@ -456,10 +487,9 @@ GG_ClimChangeRegion_ls <- lapply(CDSData_ls, FUN = function(RasterIter) {
             legend.position = "bottom",
             legend.direction = "horizontal",
             legend.key.width = unit(2, "cm"),
-            legend.key.height = unit(0.5, "cm"),
+            legend.key.height = unit(1, "cm"),
             panel.background = element_rect(fill = "#2c2c2c", color = "#2c2c2c")
         )
-
 
     Boxplot_df <- rbind(
         data.frame(
@@ -483,26 +513,147 @@ GG_ClimChangeRegion_ls <- lapply(CDSData_ls, FUN = function(RasterIter) {
         )) +
         labs(x = "Time-Windows", y = LegendTitle)
 
-    cowplot::plot_grid(ClimateChange_gg, Boxplot_gg, ncol = 2, rel_widths = c(1.7, 1))
+    ret_gg <- plot_grid(
+        plot_grid(
+            Currentday_gg, ClimateChange_gg,
+            ncol = 2
+        ),
+        Boxplot_gg,
+        ncol = 1, rel_heights = c(1.7, 1)
+    )
+
+    var <- climate_vars$name[climate_vars$name == varnames(RasterIter)]
+    ggsave(
+        ret_gg,
+        filename = file.path(Dir.Exports, var, paste0("ClimateChange_", var, ".png")),
+        width = 24 * 1.7, height = 16 * 1.7, units = "cm"
+    )
+
+    ret_gg
 })
 names(GG_ClimChangeRegion_ls) <- names(CDSData_ls)
 
-lapply(names(GG_ClimChangeRegion_ls), FUN = function(var) {
-    ggsave(
-        filename = file.path(Dir.Exports, var, paste0("ClimateChange_", var, ".png")),
-        plot = GG_ClimChangeRegion_ls[[var]],
-        width = 16 * 2, height = 8 * 2, units = "cm"
-    )
-})
-
-
-
-
 ### Predictability -------
-stop("cleaned to here - remake plots and models")
+message("Predictability Change Visualizations for the Full Region...")
+GG_PredictabilityRegion_ls <- lapply(CDSData_ls, FUN = function(RasterIter) {
+    # RasterIter <- CDSData_ls[[1]]
+    LegendTitle <- climate_vars$display[climate_vars$name == varnames(RasterIter)]
+    ClimateChangeTitle <- gsub("\\s*\\[.*?\\]", "", climate_vars$display[climate_vars$name == varnames(RasterIter)])
+
+    print(paste("                                                   ...", LegendTitle))
+
+    Start_rast <- RasterIter[[format(time(RasterIter), "%Y") %in% head(unique(format(time(RasterIter), "%Y")), 20)]]
+    Stop_rast <- RasterIter[[format(time(RasterIter), "%Y") %in% tail(unique(format(time(RasterIter), "%Y")), 20)]]
+
+
+    Predictability_ls <- pblapply(c(1, 2, 3, 5, 10), FUN = function(k) {
+        # k = 1
+        ## ARs
+        BeginAr <- app(Start_rast,
+            fun = function(x) ar(x, lag = k)
+        )
+
+        EndAr <- app(Stop_rast,
+            fun = function(x) ar(x, lag = k)
+        )
+
+        Currentday_gg <- ggplot() +
+            geom_spatraster(data = EndAr) +
+            geom_sf(data = sevenks_sf, shape = 2, colour = "white") +
+            ggrepel::geom_text_repel(
+                data = summits_df[summits_df$HEIGHTM >= 8000, ],
+                aes(x = LON, y = LAT, label = PKNAME),
+                max.overlaps = 30,
+                colour = "white"
+            ) +
+            scale_fill_viridis_c(
+                option = "C",
+                name = paste(ClimateChangeTitle, "AR", k),
+                guide = guide_colourbar(title.vjust = 0.75)
+            ) +
+            labs(
+                x = "Longitude",
+                y = "Latitude",
+                title = paste("Average", ClimateChangeTitle, k, "Day Autocorrelation During the Last 20 Years on Record"),
+            ) +
+            theme(
+                legend.position = "bottom",
+                legend.direction = "horizontal",
+                legend.key.width = unit(2, "cm"),
+                legend.key.height = unit(1, "cm"),
+                panel.background = element_rect(fill = "#2c2c2c", color = "#2c2c2c")
+            )
+
+        ClimateChange_gg <- ggplot() +
+            geom_spatraster(data = EndAr - BeginAr) +
+            geom_sf(data = sevenks_sf, shape = 2, colour = "white") +
+            ggrepel::geom_text_repel(
+                data = summits_df[summits_df$HEIGHTM >= 8000, ],
+                aes(x = LON, y = LAT, label = PKNAME),
+                max.overlaps = 30,
+                colour = "white"
+            ) +
+            scale_fill_gradient2(
+                low = "cyan",
+                mid = "grey30",
+                high = "red",
+                midpoint = 0,
+                limits = symmetric_range(values(EndAr - BeginAr)), # This ensures symmetric color scale
+                name = paste("Δ", ClimateChangeTitle, "AR", k),
+                guide = guide_colourbar(title.vjust = 0.75)
+            ) +
+            labs(
+                x = "Longitude",
+                y = "Latitude",
+                title = paste("Change in", k, "day Autocorrelation of", ClimateChangeTitle, "Between First and Last 20 Years on Record"),
+            ) +
+            theme(
+                legend.position = "bottom",
+                legend.direction = "horizontal",
+                legend.key.width = unit(2, "cm"),
+                legend.key.height = unit(1, "cm"),
+                panel.background = element_rect(fill = "#2c2c2c", color = "#2c2c2c")
+            )
+
+        Boxplot_df <- rbind(
+            data.frame(
+                Values = values(BeginAr)[, 1],
+                Time = "Beginning"
+            ),
+            data.frame(
+                Values = values(EndAr)[, 1],
+                Time = "Ending"
+            )
+        )
+
+        Boxplot_gg <- ggplot(Boxplot_df, aes(x = Time, y = Values)) +
+            geom_violin() +
+            geom_boxplot(width = 0.05) +
+            stat_compare_means(comparisons = list(c("Beginning", "Ending")), paired = TRUE) +
+            theme_bw() +
+            scale_x_discrete(labels = c(
+                "Beginning" = paste(head(unique(format(time(RasterIter), "%Y")), 20)[1], "-", tail(head(unique(format(time(RasterIter), "%Y")), 20), 1)),
+                "Ending" = paste(tail(unique(format(time(RasterIter), "%Y")), 20)[1], "-", tail(tail(unique(format(time(RasterIter), "%Y")), 20), 1))
+            )) +
+            labs(x = "Time-Windows", y = paste(ClimateChangeTitle, "AR", k))
+
+        plot_grid(Currentday_gg, Boxplot_gg, ClimateChange_gg, ncol = 3, rel_widths = c(1, 0.7, 1))
+    })
+    names(Predictability_ls) <- paste0("AR", c(1, 2, 3, 5, 10))
+
+    var <- climate_vars$name[climate_vars$name == varnames(RasterIter)]
+    ggsave(
+        plot_grid(plotlist = Predictability_ls, ncol = 1),
+        filename = file.path(Dir.Exports, var, paste0("PredictabilityChange_", var, ".png")),
+        width = 30 * 2.1, height = 42 * 2.1, units = "cm"
+    )
+
+    Predictability_ls
+})
+names(GG_PredictabilityRegion_ls) <- names(CDSData_ls)
 
 ## Summits ---------------------------------------------------------
-
+stop("cleaned to here - remake plots and models")
 
 
 ### Climate Change -------
