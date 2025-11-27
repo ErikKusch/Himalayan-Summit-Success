@@ -257,6 +257,7 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series.csv"))) {
 
         # Add extreme indicators
         var_long$Extreme <- "Normal"
+        var_long$ExtremeRatioHigh <- var_long$ExtremeRatioLow <- NA
         for (peak in unique(var_long$PeakID)) {
             for (season in c("Pre", "Post")) {
                 bounds <- seasonal_bounds[
@@ -267,8 +268,11 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series.csv"))) {
                 mask <- var_long$PeakID == peak & var_long$Season == season
                 var_long$Extreme[mask & var_long$Value < bounds$Value[bounds$Bound == "Lower"]] <- "LOW"
                 var_long$Extreme[mask & var_long$Value > bounds$Value[bounds$Bound == "Upper"]] <- "HIGH"
+                var_long$ExtremeRatioHigh <- var_long$Value / bounds$Value[bounds$Bound == "Upper"]
+                var_long$ExtremeRatioLow <- var_long$Value / bounds$Value[bounds$Bound == "Lower"]
             }
         }
+
         var_long
     }))
 
@@ -412,121 +416,367 @@ if (file.exists(file.path(Dir.Exports, "ModelData.csv"))) {
 
 # C. ANALYSES & VISUALISATION =============================================
 message("#### Analyses & Visualizations ###############################")
-
-stop("data is ready")
-
-## Figure 1 - Summit Bid Windows & Mortality ------------------------------
-# Define a scaling factor to align the ranges visually
-scaleFactor <- max(ModelData_df$SMTDAYS, na.rm = TRUE) /
-    max(ModelData_df$Mortality_all * 100, na.rm = TRUE)
-# actual plot
-ggplot(ModelData_df) +
-    # Primary variable: SMTDAYS
-    stat_smooth(
-        aes(
-            x = YEAR,
-            y = SMTDAYS,
-            group = PKNAME
-        ),
-        method = "lm",
-        color = "#535353",
-        alpha = 0.4
-    ) +
-    # Secondary variable: Mortality_all (rescaled to match SMTDAYS range)
-    stat_smooth(
-        aes(
-            x = YEAR,
-            y = Mortality_all * 100 * scaleFactor,
-            group = PKNAME
-        ),
-        method = "lm",
-        color = "red",
-        alpha = 0.6
-    ) +
-    facet_wrap(~PKNAME, ncol = 4) +
-    scale_y_continuous(
-        name = "Summit Bid Window [days]",
-        limits = c(0, 50),
-        sec.axis = sec_axis(~ . / scaleFactor, name = "Mortality [%]")
-    ) +
-    labs(x = "Year") +
-    theme_bw()
-
-## Figure 2 - Climate Trends at Summits -----------------------------------
-### Main Text (8ks, temp, wind speed, snow depth) -------
 MainVars <- data.frame(
     VarName = c("2m_temperature", "windspeed", "snow_cover"),
     ClearName = c("Air Temperature [K]", "Wind Speed [m/s]", "Snow Cover [%]")
 )
+PeakGroups <- list(
+    MainText = eightks_sf$PKNAME,
+    Supplement = sevenks_sf$PKNAME[!(sevenks_sf$PKNAME %in% eightks_sf$PKNAME)]
+)
 
-VarPlots <- lapply(1:nrow(MainVars), FUN = function(i) {
-    plot_df <- peaks_ts_df[peaks_ts_df$Variable == MainVars$VarName[i], ] ## limit to variable
-    plot_df <- plot_df[plot_df$PeakID %in% eightks_sf$PKNAME, ] ## limit to 8k peaks
-    plot_df$Date <- as.POSIXct(plot_df$Date)
+## Figure 1 - Summit Bid Windows & Mortality ------------------------------
+df_data <- ModelData_df
+### Further data prepping -------
+column_to_check <- "Mortality_all" # Here: Replace 'column_to_check' with the name of the column you want to check for NAs
+df_data_combined_complete <- df_data[complete.cases(df_data[, column_to_check]), ] # Remove rows where the specified column contains NAs
+df_data_combined_complete$year_0 <- df_data_combined_complete$YEAR - min(df_data_combined_complete$YEAR) # add year 0 as starting year
+df_data_combined_complete$DIFF_BCtoSMT <- ifelse(df_data_combined_complete$DIFF_BCtoSMT < 0, 0, df_data_combined_complete$DIFF_BCtoSMT) # All values <0 are replaced by 0
+column_to_check <- "DIFF_BCtoSMT"
+df_data_combined_complete <- df_data[complete.cases(df_data[, column_to_check]), ] # Remove rows where the specified column contains NAs
+df_filtered <- df_data_combined_complete %>% # remove BCDate < 0
+    filter(DIFF_BCtoSMT >= 0)
+df_filtered$year_0 <- df_filtered$YEAR - min(df_filtered$YEAR) # adding respective time stamp
+df_filtered <- df_filtered %>%
+    filter(HEIGHTM >= 7000)
+df_filtered$year_0 <- df_filtered$YEAR - min(df_filtered$YEAR) # add year 0 as starting year
 
-    SeasonPlots <- lapply(unique(plot_df$Season), FUN = function(SeasonIter) {
-        # SeasonIter <- "Pre"
-        plot2_df <- plot_df[plot_df$Season == SeasonIter, ]
+### Summit bid window model -------
+if (file.exists(file.path(Dir.Exports, "model_SB.RData"))) {
+    load(file.path(Dir.Exports, "model_SB.RData"))
+} else {
+    model_SB <- brms::brm(
+        DIFF_BCtoSMT ~ year_0 +
+            +year_0:PEAKID +
+            (1 | PEAKID),
+        data = df_filtered,
+        # family = "gaussian",
+        family = poisson(),
+        chains = 4,
+        cores = 4,
+        # cores = parallel::detectCores(),
+        iter = 10000,
+        warmup = 5000
+    )
+    save(model_SB, file = file.path(Dir.Exports, "model_SB.RData"))
+}
+summary(model_SB)
+# plot(model_SB)
+pp_check(model_SB, ndraws = 500)
+# conditional_effects(model_SB, points = TRUE)
+conditions <- data.frame(PEAKID = sort(unique(df_filtered$PEAKID)))
+rownames(conditions) <- sort(unique(df_filtered$PEAKID))
+conde_SB <- conditional_effects(model_SB,
+    conditions = conditions,
+    # method = "posterior_predict", # posterior predictive
+    re_formula = NULL, # Include random effects
+    effects = "year_0"
+)
+conde_SB[1]
 
-        labelInfo <- split(plot2_df, plot2_df$PeakID)
-        labelInfo <- lapply(labelInfo, function(dat) {
-            # dat$Date <- seq_along(dat$Date)
-            lmmod <- lm(Value ~ Date, data = dat)
-            Label <- predict(lmmod, newdata = data.frame(Date = max(dat$Date)))
+# trainlabels <- c("Peaks_7000_masl")
+
+# plot(conde2, ncol = 5, points = FALSE, plot = TRUE)[[1]] +
+#     scale_color_manual(name = expression(italic(u) * "*"), values = c("gold", "darkgrey", "darkgreen")) +
+#     scale_fill_manual(name = expression(italic(u) * "*"), values = c("gold", "darkgrey", "darkgreen")) +
+#     labs(
+#         title = trainlabels, x = "Years", y = "Summit Bid Time Window",
+#         colour = "windspeed",
+#         fill = "windspeed"
+#     ) +
+#     theme_bw()
+
+### Mortality model -------
+ids_to_remove <- c("SAIP", "PUTH", "GYAJ", "HIME", "LANG", "GANG", "CHAM") # Peaks with mortality = 0, i.e. no reported deaths
+
+# Fiter dataset, i.e. deleting peaks with no mortality
+df_filtered <- df_data_combined_complete %>%
+    filter(!(PEAKID %in% ids_to_remove))
+df_filtered$year_0 <- df_filtered$YEAR - min(df_filtered$YEAR) # adding respective time stamp
+
+if (file.exists(file.path(Dir.Exports, "model_Mt.RData"))) {
+    load(file.path(Dir.Exports, "model_Mt.RData"))
+} else {
+    model_Mt <- brms::brm(
+        Mortality_all ~ year_0 +
+            year_0:PEAKID +
+            (1 | PEAKID),
+        data = df_filtered,
+        # data = df_data_combined_complete,
+        family = zero_one_inflated_beta(),
+        chains = 4,
+        cores = parallel::detectCores(),
+        iter = 10000,
+        warmup = 5000,
+        init_r = 0.1
+    )
+    save(model_Mt, file = file.path(Dir.Exports, "model_Mt.RData"))
+}
+summary(model_Mt)
+# plot(model_Mt)
+pp_check(model_Mt, ndraws = 500)
+# conditional_effects(model_Mt, points = TRUE)
+# round(brms::ranef(model_Mt)[[1]], 2)
+conditions <- data.frame(PEAKID = sort(unique(df_filtered$PEAKID)))
+rownames(conditions) <- sort(unique(df_filtered$PEAKID))
+conde_Mt <- conditional_effects(model_Mt,
+    conditions = conditions,
+    # method = "posterior_predict", # posterior predictive
+    re_formula = NULL, # Include random effects
+    effects = "year_0"
+)
+conde_Mt[1]
+
+stop("plot Chris' models")
+# plot(conde6, ncol = 5, points = FALSE, plot = TRUE)[[1]] +
+#     scale_color_manual(name = expression(italic(u) * "*"), values = c("gold", "darkgrey", "darkgreen")) +
+#     scale_fill_manual(name = expression(italic(u) * "*"), values = c("gold", "darkgrey", "darkgreen")) +
+#     labs(
+#         title = trainlabels, x = "Years", y = "Mortality",
+#         colour = "windspeed",
+#         fill = "windspeed"
+#     ) +
+#     theme_bw()
+
+
+## Figure 2 - Climate Trends at Summits -----------------------------------
+stop("try to show pre/post-monsoon in one panel by placing pre-monsoon labels on left and post-monsoon labels on right")
+lapply(1:length(PeakGroups), FUN = function(PKNames) {
+    VarPlots <- lapply(1:nrow(MainVars), FUN = function(i) {
+        # i = 1
+        # PKNames <- 1
+        ### Prepare plot data -----
+        plot_df <- peaks_ts_df[peaks_ts_df$Variable == MainVars$VarName[i], ] ## limit to variable
+        plot_df <- plot_df[plot_df$PeakID %in% PeakGroups[[PKNames]], ] ## limit to 8k peaks
+        plot_df$Date <- as.POSIXct(plot_df$Date)
+        plot_df$Year <- as.numeric(substr(plot_df$Date, 1, 4))
+        plot_df <- plot_df %>%
+            left_join(
+                summits_df %>% select(PKNAME, ID),
+                by = c("PeakID" = "PKNAME")
+            )
+        breaks <- seq(1051, 2021, by = 10)
+        plot_df$YearBin <- cut(
+            plot_df$Year,
+            breaks = breaks,
+            include.lowest = TRUE,
+            right = FALSE,
+            labels = paste0(breaks[-length(breaks)], ":", breaks[-1])
+        )
+
+        ### Line plots of change over years -----
+        #### Prepare Labels +++++
+        # Prepare label information for each ID and Season
+        labelInfo <- lapply(split(plot_df, list(plot_df$ID, plot_df$Season)), function(dat) {
+            lmmod <- lm(Value ~ Year, data = dat)
+            label_year <- if (unique(dat$Season) == "Pre") min(dat$Year) else max(dat$Year)
+            Label <- predict(lmmod, newdata = data.frame(Year = label_year))
             data.frame(
-                PeakID = unique(dat$PeakID),
+                ID = unique(dat$ID),
+                Season = unique(dat$Season),
                 LabelPos = Label,
-                Pval = summary(lmmod)$coefficients["Date", "Pr(>|t|)"]
+                LabelYear = label_year,
+                Pval = summary(lmmod)$coefficients["Year", "Pr(>|t|)"],
+                Effect = summary(lmmod)$coefficients["Year", "Estimate"]
             )
         })
         labelInfo <- do.call(rbind, labelInfo)
+        labelInfo$Fill <- as.character(labelInfo$Pval < 0.5)
 
-        plot2_df$StatSig <- FALSE
-        plot2_df <- left_join(plot2_df, labelInfo, by = "PeakID")
-        plot2_df$StatSig[plot2_df$Pval < 0.05] <- TRUE
+        season_trends <- lapply(unique(plot_df$Season), function(season) {
+            dat <- plot_df %>% filter(Season == season)
+            lmmod <- lm(Value ~ Year, data = dat)
+            # Label positions: start for pre, end for post
+            label_year <- if (season == "Pre") min(dat$Year) else max(dat$Year)
+            Label <- predict(lmmod, newdata = data.frame(Year = label_year))
+            data.frame(
+                ID = "Region",
+                Season = season,
+                LabelPos = Label,
+                LabelYear = label_year,
+                Pval = summary(lmmod)$coefficients["Year", "Pr(>|t|)"],
+                Fill = "Region",
+                Effect = summary(lmmod)$coefficients["Year", "Estimate"]
+            )
+        })
+        season_trends <- do.call(rbind, season_trends)
+        labelInfo <- rbind(labelInfo, season_trends)
 
-        Mean_gg <- ggplot(plot2_df, aes(x = Date, y = Value)) +
-            geom_smooth(method = "lm", fill = "#156082", col = "#156082", linewidth = 2) +
-            geom_smooth(aes(group = PeakID, linetype = StatSig), col = "#535353", method = "lm", alpha = 0.2, linewidth = 0.8) +
+        # Merge labels back to main dataframe for significance
+        plot_df <- plot_df %>%
+            left_join(labelInfo, by = c("ID", "Season")) %>%
+            mutate(StatSig = Pval < 0.05)
+        plot_df$Effect <- as.numeric(plot_df$Effect)
+        labelInfo$Effect <- as.numeric(labelInfo$Effect)
+
+        #### Actual Plot +++++
+        Return_gg <- ggplot(plot_df, aes(x = Year, y = Value, group = interaction(ID, Season))) +
+            # Trendlines for each peak-season
+            geom_smooth(aes(linetype = StatSig, col = Effect), method = "lm", alpha = 0.3, linewidth = 0.8, show.legend = TRUE) +
+            # Overall trendlines per season
+            geom_smooth(aes(group = Season), method = "lm", linewidth = 2, col = "#1a1b1b", show.legend = FALSE) +
+            # Labels for each ID
             geom_label_repel(
                 data = labelInfo,
-                aes(
-                    x = max(as.POSIXct(plot2_df$Date)), y = LabelPos, #- 0.07,
-                    label = PeakID,
-                    fill = Pval < 0.05
+                aes(x = LabelYear, y = LabelPos, label = ID, fill = Effect),
+                color = "#000000",
+                size = 8,
+                hjust = ifelse(labelInfo$Season == "Pre", 1.5, -1),
+                direction = "y",
+                nudge_x = 0,
+                show.legend = FALSE
+            ) +
+            # Linetype legend for StatSig
+            scale_linetype_manual(
+                name = "Statistical Significance of Trend",
+                values = c(`FALSE` = "dashed", `TRUE` = "solid"),
+                guide = guide_legend(
+                    title.position = "top",
+                    label.position = "bottom",
+                    nrow = 1,
+                    override.aes = list(
+                        size = 1.5, # thicker lines
+                        color = "black" # force legend lines to black
+                    ),
+                    keywidth = 4,
+                    keyheight = 1,
+                    order = 2 # shows second in legend
+                )
+            ) +
+            # Continuous color bar for Effect
+            scale_color_viridis_c(
+                direction = -1,
+                name = "Mean Change Year over Year",
+                guide = guide_colorbar(
+                    title.position = "top",
+                    barwidth = 15,
+                    barheight = 1.5,
+                    order = 1 # shows first in legend
                 ),
-                color = "#423f3f",
-                nudge_x = 0, direction = "y", hjust = -0.4,
-                size = 6
+            ) +
+            # Fill scale for labels (optional if you want label fill colors)
+            scale_fill_viridis_c(direction = -1) +
+            # Axis labels
+            labs(
+                x = "Year",
+                y = MainVars$ClearName[i]
+            ) +
+            # Plot limits
+            lims(x = c(min(plot_df$Year) - 5, max(plot_df$Year) + 5)) +
+            # Theme and legend layout
+            theme_bw() +
+            theme(
+                legend.position = "bottom",
+                legend.box = "horizontal",
+                legend.direction = "horizontal",
+                legend.justification = "center",
+                legend.box.spacing = unit(5, "pt") # small spacing between legends
+            ) +
+            # Remove unwanted fill legend for labels
+            guides(
+                fill = "none"
+            )
+
+        ### Density plots of change over years -----
+        #### Individual peaks +++++
+        Var_density <- ggplot(plot_df, aes(
+            x = Value,
+            color = YearBin,
+            fill = YearBin
+        )) +
+            geom_density(alpha = 0.05, adjust = 1) +
+            facet_grid(PeakID ~ Season, scales = "free_x") +
+            scale_color_viridis_d(option = "C", direction = -1) +
+            scale_fill_viridis_d(option = "C", direction = -1) +
+            labs(
+                x = MainVars$ClearName[i],
+                y = "Density",
+                color = "10-year bins",
+                fill = "10-year bins"
             ) +
             theme_bw() +
-            lims(x = c(min(plot2_df$Date), max(plot2_df$Date) + 4000 * 60 * 60 * 24)) +
-            labs(y = MainVars$ClearName[i], x = "Date") +
-            scale_linetype_manual(values = c(`FALSE` = "dashed", `TRUE` = "solid")) +
-            scale_fill_manual(values = c(`TRUE` = "#70e070", `FALSE` = "#d14d4d")) +
-            guides(linetype = "none", fill = "none")
-        Mean_gg
-    })
+            theme(
+                legend.position = "bottom",
+                legend.box = "horizontal",
+                legend.direction = "horizontal",
+                legend.justification = "center",
+                legend.box.spacing = unit(0, "pt")
+            ) +
+            guides(
+                color = guide_legend(nrow = 1, byrow = TRUE),
+                fill  = guide_legend(nrow = 1, byrow = TRUE)
+            )
 
-    plot_grid(plotlist = SeasonPlots)
+        #### Entire Region +++++
+        plot_df$Season <- factor(plot_df$Season, levels = c("Pre", "Post"))
+        plot_df$Season <- factor(
+            plot_df$Season,
+            levels = c("Pre", "Post"), # original values in your data
+            labels = c("Pre-Monsoon", "Post-Monsoon") # desired facet labels
+        )
+        season_plots <- ggplot(plot_df, aes(x = Value, color = YearBin, fill = YearBin)) +
+            geom_density(alpha = 0.05, adjust = 1) +
+            # Continuous color scales for decades
+            scale_color_viridis_d(option = "C", direction = -1, name = "10-year bins") +
+            scale_fill_viridis_d(option = "C", direction = -1, name = "10-year bins") +
+            # Facet by Season in one column
+            facet_wrap(~Season, ncol = 1, scales = "free_y") +
+            # Labels
+            labs(
+                x = MainVars$ClearName[i],
+                y = "Density"
+            ) +
+            # Theme
+            theme_bw() +
+            theme(
+                legend.position = "bottom",
+                legend.box = "horizontal",
+                legend.direction = "horizontal",
+                legend.justification = "center",
+                legend.box.spacing = unit(0, "pt"),
+                strip.text = element_text(size = 12, face = "bold")
+            ) +
+            guides(
+                color = guide_legend(nrow = 1, byrow = TRUE),
+                fill  = guide_legend(nrow = 1, byrow = TRUE)
+            )
+
+        ### Return plots -----
+        #### Saving individual peak plot +++++
+        clean_x <- gsub("\\[.*?\\]", "", MainVars$ClearName[i])
+        ggsave(
+            Var_density,
+            file = file.path(Dir.Exports, paste0("Raw_Density_", clean_x, "_", names(PeakGroups)[PKNames], ".png")),
+            width = 12, height = 20
+        )
+
+        ### Making panel plot +++++
+        Up_gg <- plot_grid(
+            Return_gg, season_plots,
+            nrow = 1, rel_widths = c(1, 0.75)
+        )
+
+        Up_gg
+    })
+    ggsave(
+        plot_grid(plotlist = VarPlots, ncol = 1),
+        file = file.path(Dir.Exports, paste0("Figure2_", names(PeakGroups)[PKNames], ".png")),
+        width = 24, height = 24
+    )
 })
 
-ggsave(
-    plot_grid(plotlist = VarPlots, ncol = 1),
-    file = "Figure1.png",
-    width = 24, height = 24
-)
-
-### Supplement (All peaks, all vars) -------
-"not implemented because there are only snow cover and snow fall left"
-
 ## Figure 3 - Extreme Weather Events at Summits ---------------------------
+stop("make this happen in one loop for all figures produced here and show (1) count of extremes, (2) length of consecutive extremes and (3) degree of ectreemness")
 
-## Figure 4 - Shift in Seasonal Usage Patterns ----------------------------
+## Figure 4 - Shift in Seasonal Predictability ----------------------------
+stop("show change in predictability change over time in season")
 
+## Figure 5 - Shift in Seasonal Usage Patterns ----------------------------
+stop("show change in expeditions in seasons over time as well as amount of people in the mountains")
+# + Predictability
 
 ## Entire Region ---------------------------------------------------
-stop("No need to run all viz at this point")
+stop("Everything past here has to be deleted by the end")
 
 
 ### Climate Change -------
