@@ -542,6 +542,10 @@ stop("plot Chris' models")
 ## Figure 2 - Climate Trends at Summits -----------------------------------
 stop("try to show pre/post-monsoon in one panel by placing pre-monsoon labels on left and post-monsoon labels on right")
 lapply(1:length(PeakGroups), FUN = function(PKNames) {
+    FName <- file.path(Dir.Exports, paste0("Figure2_", names(PeakGroups)[PKNames], ".png"))
+    if (file.exists(file.path(Dir.Exports, paste0("Figure2_", names(PeakGroups)[PKNames], ".png")))) {
+        return(FName)
+    }
     VarPlots <- lapply(1:nrow(MainVars), FUN = function(i) {
         # i = 1
         # PKNames <- 1
@@ -760,8 +764,8 @@ lapply(1:length(PeakGroups), FUN = function(PKNames) {
     })
     ggsave(
         plot_grid(plotlist = VarPlots, ncol = 1),
-        file = file.path(Dir.Exports, paste0("Figure2_", names(PeakGroups)[PKNames], ".png")),
-        width = 24, height = 24
+        file = FName,
+        width = ifelse(PKNames == 1, 24, 48), height = ifelse(PKNames == 1, 24, 48)
     )
 })
 
