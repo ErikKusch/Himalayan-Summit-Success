@@ -540,7 +540,6 @@ stop("plot Chris' models")
 
 
 ## Figure 2 - Climate Trends at Summits -----------------------------------
-stop("try to show pre/post-monsoon in one panel by placing pre-monsoon labels on left and post-monsoon labels on right")
 lapply(1:length(PeakGroups), FUN = function(PKNames) {
     FName <- file.path(Dir.Exports, paste0("Figure2_", names(PeakGroups)[PKNames], ".png"))
     if (file.exists(file.path(Dir.Exports, paste0("Figure2_", names(PeakGroups)[PKNames], ".png")))) {
@@ -748,9 +747,10 @@ lapply(1:length(PeakGroups), FUN = function(PKNames) {
         ### Return plots -----
         #### Saving individual peak plot +++++
         clean_x <- gsub("\\[.*?\\]", "", MainVars$ClearName[i])
+        dir.create(file.path(Dir.Exports, clean_x))
         ggsave(
             Var_density,
-            file = file.path(Dir.Exports, paste0("Raw_Density_", clean_x, "_", names(PeakGroups)[PKNames], ".png")),
+            file = file.path(Dir.Exports, clean_x, paste0("Raw_Density_", clean_x, "_", names(PeakGroups)[PKNames], ".png")),
             width = 12, height = 20
         )
 
@@ -779,8 +779,8 @@ stop("show change in predictability change over time in season")
 stop("show change in expeditions in seasons over time as well as amount of people in the mountains")
 # + Predictability
 
-## Entire Region ---------------------------------------------------
-stop("Everything past here has to be deleted by the end")
+## More supplementary figures ---------------------------------------------
+stop("should keep figures that produce maps!!!")
 
 
 ### Climate Change -------
