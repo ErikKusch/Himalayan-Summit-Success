@@ -591,44 +591,44 @@ lapply(1:length(PeakGroups), FUN = function(PKNames) {
         # MT line + ribbon
         geom_ribbon(
             data = dfMT_iter,
-            aes(x = year_0 + 1951, ymin = lower__, ymax = upper__, fill = "Mortality Estimates"),
+            aes(x = year_0 + 1951, ymin = lower__, ymax = upper__, fill = "Death Rate [%]"),
             alpha = 0.2
         ) +
         geom_line(
             data = dfMT_iter,
-            aes(x = year_0 + 1951, y = estimate__, color = "Mortality Estimates", linetype = "Mortality Estimates"),
+            aes(x = year_0 + 1951, y = estimate__, color = "Death Rate [%]", linetype = "Death Rate [%]"),
             size = 1
         ) +
         # SB line + ribbon (scaled) with dashed line
         geom_ribbon(
             data = dfSB_iter,
-            aes(x = year_0 + 1951, ymin = lower__ * scale_factor, ymax = upper__ * scale_factor, fill = "Summit Bid Window"),
+            aes(x = year_0 + 1951, ymin = lower__ * scale_factor, ymax = upper__ * scale_factor, fill = "Summit Bid Window [days]"),
             alpha = 0.2
         ) +
         geom_line(
             data = dfSB_iter,
-            aes(x = year_0 + 1951, y = estimate__ * scale_factor, color = "Summit Bid Window", linetype = "Summit Bid Window"),
+            aes(x = year_0 + 1951, y = estimate__ * scale_factor, color = "Summit Bid Window [days]", linetype = "Summit Bid Window [days]"),
             size = 1
         ) +
         # Facets per PEAKID
         facet_wrap(~PEAKID, scales = "free_y", nrow = 4) +
         # Dual axis
         scale_y_continuous(
-            name = "Mortality Estimates",
-            sec.axis = sec_axis(~ . / scale_factor, name = "Summit Bid Window")
+            name = "Death Rate [%]",
+            sec.axis = sec_axis(~ . / scale_factor, name = "Summit Bid Window [days]")
         ) +
         # Manual legend for color and fill
         scale_color_manual(
             name = "Estimate Type",
-            values = c("Mortality Estimates" = "#3f0027", "Summit Bid Window" = "#003f25")
+            values = c("Death Rate [%]" = "#3f0027", "Summit Bid Window [days]" = "#003f25")
         ) +
         scale_fill_manual(
             name = "Estimate Type",
-            values = c("Mortality Estimates" = "#3f0027", "Summit Bid Window" = "#003f25")
+            values = c("Death Rate [%]" = "#3f0027", "Summit Bid Window [days]" = "#003f25")
         ) +
         scale_linetype_manual(
             name = "Estimate Type",
-            values = c("Mortality Estimates" = "solid", "Summit Bid Window" = "dashed")
+            values = c("Death Rate [%]" = "solid", "Summit Bid Window [days]" = "dashed")
         ) +
         # Axis title colors
         theme_bw() +
