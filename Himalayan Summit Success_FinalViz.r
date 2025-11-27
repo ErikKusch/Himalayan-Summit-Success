@@ -440,6 +440,16 @@ df_filtered$year_0 <- df_filtered$YEAR - min(df_filtered$YEAR) # adding respecti
 df_filtered <- df_filtered %>%
     filter(HEIGHTM >= 7000)
 df_filtered$year_0 <- df_filtered$YEAR - min(df_filtered$YEAR) # add year 0 as starting year
+breaks <- seq(1051, 2021, by = 10)
+df_filtered$YearBin <- cut(
+    df_filtered$YEAR,
+    breaks = breaks,
+    include.lowest = TRUE,
+    right = FALSE,
+    labels = paste0(breaks[-length(breaks)], ":", breaks[-1])
+)
+df_filtered$FacetLabel <- paste(df_filtered$SEASON, df_filtered$PEAKID, sep = " – ")
+densdf_SB <- df_filtered
 
 ### Summit bid window model -------
 if (file.exists(file.path(Dir.Exports, "model_SB.RData"))) {
@@ -472,19 +482,7 @@ conde_SB <- conditional_effects(model_SB,
     re_formula = NULL, # Include random effects
     effects = "year_0"
 )
-conde_SB[1]
-
-# trainlabels <- c("Peaks_7000_masl")
-
-# plot(conde2, ncol = 5, points = FALSE, plot = TRUE)[[1]] +
-#     scale_color_manual(name = expression(italic(u) * "*"), values = c("gold", "darkgrey", "darkgreen")) +
-#     scale_fill_manual(name = expression(italic(u) * "*"), values = c("gold", "darkgrey", "darkgreen")) +
-#     labs(
-#         title = trainlabels, x = "Years", y = "Summit Bid Time Window",
-#         colour = "windspeed",
-#         fill = "windspeed"
-#     ) +
-#     theme_bw()
+df_SB <- conde_SB[1]$year_0
 
 ### Mortality model -------
 ids_to_remove <- c("SAIP", "PUTH", "GYAJ", "HIME", "LANG", "GANG", "CHAM") # Peaks with mortality = 0, i.e. no reported deaths
@@ -493,6 +491,16 @@ ids_to_remove <- c("SAIP", "PUTH", "GYAJ", "HIME", "LANG", "GANG", "CHAM") # Pea
 df_filtered <- df_data_combined_complete %>%
     filter(!(PEAKID %in% ids_to_remove))
 df_filtered$year_0 <- df_filtered$YEAR - min(df_filtered$YEAR) # adding respective time stamp
+breaks <- seq(1051, 2021, by = 10)
+df_filtered$YearBin <- cut(
+    df_filtered$YEAR,
+    breaks = breaks,
+    include.lowest = TRUE,
+    right = FALSE,
+    labels = paste0(breaks[-length(breaks)], ":", breaks[-1])
+)
+df_filtered$FacetLabel <- paste(df_filtered$SEASON, df_filtered$PEAKID, sep = " – ")
+densdf_MT <- df_filtered
 
 if (file.exists(file.path(Dir.Exports, "model_Mt.RData"))) {
     load(file.path(Dir.Exports, "model_Mt.RData"))
@@ -525,18 +533,120 @@ conde_Mt <- conditional_effects(model_Mt,
     re_formula = NULL, # Include random effects
     effects = "year_0"
 )
-conde_Mt[1]
+df_MT <- conde_Mt[1]$year_0
 
-stop("plot Chris' models")
-# plot(conde6, ncol = 5, points = FALSE, plot = TRUE)[[1]] +
-#     scale_color_manual(name = expression(italic(u) * "*"), values = c("gold", "darkgrey", "darkgreen")) +
-#     scale_fill_manual(name = expression(italic(u) * "*"), values = c("gold", "darkgrey", "darkgreen")) +
-#     labs(
-#         title = trainlabels, x = "Years", y = "Mortality",
-#         colour = "windspeed",
-#         fill = "windspeed"
-#     ) +
-#     theme_bw()
+### Plotting -------
+lapply(1:length(PeakGroups), FUN = function(PKNames) {
+    # PKNames <- 1
+    FName <- file.path(Dir.Exports, paste0("Figure1_", names(PeakGroups)[PKNames], ".png"))
+    if (file.exists(file.path(Dir.Exports, paste0("Figure1_", names(PeakGroups)[PKNames], ".png")))) {
+        return(FName)
+    }
+
+    IterIDs <- summits_df$ID[match(PeakGroups[[PKNames]], summits_df$PKNAME)]
+    dfSB_iter <- df_SB[df_SB$PEAKID %in% IterIDs, ]
+    dfMT_iter <- df_MT[df_MT$PEAKID %in% IterIDs, ]
+    dfMT_iter$Source <- "MT"
+    dfSB_iter$Source <- "SB"
+
+    colnames(dfMT_iter)[2] <- "DataValue"
+    colnames(dfSB_iter)[2] <- "DataValue"
+    df_combined <- rbind(dfMT_iter, dfSB_iter)
+
+    # SB_density <- ggplot(
+    #     densdf_SB[densdf_SB$PEAKID %in% IterIDs, ],
+    #     aes(
+    #         x = DIFF_BCtoSMT,
+    #         color = YearBin,
+    #         fill = YearBin
+    #     )
+    # ) +
+    #     geom_density(alpha = 0.1, adjust = 1) +
+    #     # facet_wrap(~SEASON, scales = "free", ncol = 1) + # <-- ONE LINE OF FACETING
+    #     scale_color_viridis_d(option = "C", direction = -1) +
+    #     scale_fill_viridis_d(option = "C", direction = -1) +
+    #     labs(
+    #         x = "Summit Bid Window Estimates",
+    #         y = "Density",
+    #         color = "10-year bins",
+    #         fill = "10-year bins",
+    #     ) +
+    #     theme_bw() +
+    #     theme(
+    #         legend.position = "bottom",
+    #         legend.box = "horizontal",
+    #         legend.direction = "horizontal",
+    #         legend.justification = "center",
+    #         legend.box.spacing = unit(0, "pt")
+    #     ) +
+    #     guides(
+    #         color = guide_legend(nrow = 1, byrow = TRUE),
+    #         fill  = guide_legend(nrow = 1, byrow = TRUE)
+    #     )
+
+    # Compute scaling factor
+    scale_factor <- max(dfMT_iter$estimate__, na.rm = TRUE) / max(dfSB_iter$estimate__, na.rm = TRUE)
+
+    BidMortality_gg <- ggplot() +
+        # MT line + ribbon
+        geom_ribbon(
+            data = dfMT_iter,
+            aes(x = year_0 + 1951, ymin = lower__, ymax = upper__, fill = "Mortality Estimates"),
+            alpha = 0.2
+        ) +
+        geom_line(
+            data = dfMT_iter,
+            aes(x = year_0 + 1951, y = estimate__, color = "Mortality Estimates", linetype = "Mortality Estimates"),
+            size = 1
+        ) +
+        # SB line + ribbon (scaled) with dashed line
+        geom_ribbon(
+            data = dfSB_iter,
+            aes(x = year_0 + 1951, ymin = lower__ * scale_factor, ymax = upper__ * scale_factor, fill = "Summit Bid Window"),
+            alpha = 0.2
+        ) +
+        geom_line(
+            data = dfSB_iter,
+            aes(x = year_0 + 1951, y = estimate__ * scale_factor, color = "Summit Bid Window", linetype = "Summit Bid Window"),
+            size = 1
+        ) +
+        # Facets per PEAKID
+        facet_wrap(~PEAKID, scales = "free_y", nrow = 4) +
+        # Dual axis
+        scale_y_continuous(
+            name = "Mortality Estimates",
+            sec.axis = sec_axis(~ . / scale_factor, name = "Summit Bid Window")
+        ) +
+        # Manual legend for color and fill
+        scale_color_manual(
+            name = "Estimate Type",
+            values = c("Mortality Estimates" = "#3f0027", "Summit Bid Window" = "#003f25")
+        ) +
+        scale_fill_manual(
+            name = "Estimate Type",
+            values = c("Mortality Estimates" = "#3f0027", "Summit Bid Window" = "#003f25")
+        ) +
+        scale_linetype_manual(
+            name = "Estimate Type",
+            values = c("Mortality Estimates" = "solid", "Summit Bid Window" = "dashed")
+        ) +
+        # Axis title colors
+        theme_bw() +
+        theme(
+            axis.title.y = element_text(color = "#3f0027"),
+            axis.title.y.right = element_text(color = "#003f25"),
+            # Legend at top in single row
+            legend.position = "top",
+            legend.direction = "horizontal",
+            legend.key.width = unit(2, "cm")
+        ) +
+        labs(x = "Year")
+    ggsave(
+        BidMortality_gg,
+        file = FName,
+        width = ifelse(PKNames == 1, 24, 48), height = ifelse(PKNames == 1, 20, 40)
+    )
+})
 
 
 ## Figure 2 - Climate Trends at Summits -----------------------------------
