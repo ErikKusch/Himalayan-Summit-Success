@@ -283,15 +283,15 @@ plotlist <- lapply(1:length(Dataframes), FUN = function(i) {
             ) +
             # Manual legend (colors + linetype)
             scale_color_manual(
-                name = "Estimate Type",
+                name = "",
                 values = setNames(cols[1:2], Names[1:2])
             ) +
             scale_fill_manual(
-                name = "Estimate Type",
+                name = "",
                 values = setNames(cols[1:2], Names[1:2])
             ) +
             scale_linetype_manual(
-                name = "Estimate Type",
+                name = "",
                 values = setNames(c("solid", "dashed"), Names[1:2])
             ) +
             # Facets per PEAKID
@@ -363,26 +363,32 @@ plotlist <- lapply(1:length(Dataframes), FUN = function(i) {
         ) +
         # Manual legend (colors + linetype)
         scale_color_manual(
-            name = "Estimate Type",
+            name = "",
             values = setNames(cols[1:2], Names[1:2])
         ) +
         scale_fill_manual(
-            name = "Estimate Type",
+            name = "",
             values = setNames(cols[1:2], Names[1:2])
         ) +
         scale_linetype_manual(
-            name = "Estimate Type",
+            name = "",
             values = setNames(c("solid", "dashed"), Names[1:2])
         ) +
         # Labels
         labs(x = "Year") +
         # Theme
         theme_bw() +
+        guides(
+            color = guide_legend(ncol = 1),
+            fill = guide_legend(ncol = 1),
+            linetype = guide_legend(ncol = 1)
+        ) +
         theme(
             axis.title.y = element_text(color = cols[1]),
             axis.title.y.right = element_text(color = cols[2]),
             legend.position = "top",
-            legend.direction = "horizontal",
+            legend.direction = "vertical",
+            legend.box = "vertical",
             legend.key.width = unit(2, "cm"),
             strip.text = element_text(face = "bold")
         )
@@ -405,218 +411,14 @@ ggsave(
 img <- readPNG(file.path(Dir.Exports, "AreaMap.png")) # replace with your file path
 Map_png <- rasterGrob(img, interpolate = TRUE) # convert to a grob
 combined <- plot_grid(
-    plot_grid(plotlist = lapply(plotlist, "[[", "Main"), nrow = 1),
+    plot_grid(plotlist = lapply(lapply(plotlist, "[[", "Main"), FUN = function(p) {
+        p + theme(text = element_text(size = 20))
+    }), nrow = 1),
     Map_png,
-    ncol = 1
+    ncol = 1, rel_heights = c(1, 1.9)
 )
 ggsave(
     combined,
     file = FName,
-    width = 20, height = 16
+    width = 20, height = 22
 )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ## Summit Bid Window & Number of Expeditions ------------------------------
-# ### Main Text --------
-# # entire region, totals have to be summed
-
-# ### Supplement --------
-# # individual peaks
-
-
-
-# ## Size of Indvidual Expeditions & Total Size of all Expeditions ----------
-
-# ### Main Text --------
-# # entire region, totals have to be summed
-
-# ### Supplement --------
-# # individual peaks
-
-
-
-
-
-# ## Mortality & Death Rate Panel -------------------------------------------
-# ### Main Text --------
-# # entire region, totals have to be summed
-
-# ### Supplement --------
-# # individual peaks
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ## Summit Bid Window & Expedition Size Panel ------------------------------
-# ### Main Text Plot  ------------
-# # Combine draws by .draw, year_0, PEAKID
-# combined_draws2 <- left_join(
-#     ES_draws %>% select(PEAKID, year_0, .draw, ES),
-#     SB_draws %>% select(PEAKID, year_0, .draw, SB),
-#     by = c("PEAKID", "year_0", ".draw")
-# )
-
-# # Compute scaling factor
-# scale_factor <- max(combined_draws2$ES, na.rm = TRUE) / max(combined_draws2$SB, na.rm = TRUE) / 1.5
-
-# BidMembers_gg <- ggplot(combined_draws2, aes(x = year_0 + 1951)) +
-#     # Expedition Size (ES) - primary axis
-#     stat_lineribbon(
-#         aes(
-#             y = ES,
-#             fill = "Expedition Size [#]",
-#             color = "Expedition Size [#]",
-#             linetype = "Expedition Size [#]"
-#         ),
-#         .width = c(.95, 0.8, 0.5),
-#         alpha = 0.2,
-#         size = 1
-#     ) +
-#     # Summit Bid Window (SB) - secondary axis, scaled
-#     stat_lineribbon(
-#         aes(
-#             y = SB / scale_factor,
-#             fill = "Summit Bid Window [days]",
-#             color = "Summit Bid Window [days]",
-#             linetype = "Summit Bid Window [days]"
-#         ),
-#         .width = c(.95, 0.8, 0.5),
-#         alpha = 0.2,
-#         size = 1
-#     ) +
-#     # Dual y-axis
-#     scale_y_continuous(
-#         name = "Expedition Size [#]",
-#         sec.axis = sec_axis(~ . * scale_factor, name = "Summit Bid Window [days]")
-#     ) +
-#     # Manual legend (colors + linetype)
-#     scale_color_manual(
-#         name = "Estimate Type",
-#         values = c("Expedition Size [#]" = "#961765", "Summit Bid Window [days]" = "#8a8b21")
-#     ) +
-#     scale_fill_manual(
-#         name = "Estimate Type",
-#         values = c("Expedition Size [#]" = "#961765", "Summit Bid Window [days]" = "#8a8b21")
-#     ) +
-#     scale_linetype_manual(
-#         name = "Estimate Type",
-#         values = c("Expedition Size [#]" = "solid", "Summit Bid Window [days]" = "dashed")
-#     ) +
-#     # Facets per PEAKID
-#     facet_wrap(~PEAKID, scales = "free_y", nrow = 4) +
-#     # Labels
-#     labs(x = "Year") +
-#     # Theme
-#     theme_bw() +
-#     theme(
-#         axis.title.y = element_text(color = "#961765"),
-#         axis.title.y.right = element_text(color = "#8a8b21"),
-#         legend.position = "top",
-#         legend.direction = "horizontal",
-#         legend.key.width = unit(2, "cm"),
-#         strip.text = element_text(face = "bold")
-#     )
-# BidMembers_gg
-
-# ### Supplement Plot  ------------
-
-# ## Mortality & Death Rate Panel -------------------------------------------
-# ### Main Text Plot  ------------
-# # Scale factor for secondary axis
-# scale_factor <- max(combined_draws$mort_rate / 2, na.rm = TRUE)
-
-# MortDeaths_gg <- ggplot(combined_draws, aes(x = year_0 + 1951)) +
-#     # Primary y-axis: probability of any mortality (blue)
-#     stat_lineribbon(
-#         aes(
-#             y = prob_mort,
-#             fill = "Probability of Any Mortality",
-#             color = "Probability of Any Mortality",
-#             linetype = "Probability of Any Mortality"
-#         ),
-#         .width = c(.95, 0.8, 0.5),
-#         alpha = 0.2,
-#         size = 1
-#     ) +
-#     # Secondary y-axis: conditional mortality (orange), scaled
-#     stat_lineribbon(
-#         aes(
-#             y = mort_rate / scale_factor,
-#             fill = "Conditional Mortality (given >0)",
-#             color = "Conditional Mortality (given >0)",
-#             linetype = "Conditional Mortality (given >0)"
-#         ),
-#         .width = c(.95, 0.8, 0.5),
-#         alpha = 0.2,
-#         size = 1
-#     ) +
-#     # Dual y-axis
-#     scale_y_continuous(
-#         name = "Probability of Any Mortality",
-#         sec.axis = sec_axis(~ . * scale_factor, name = "Conditional Mortality (given >0)")
-#     ) +
-#     # Manual legend
-#     scale_color_manual(
-#         name = "Estimate Type",
-#         values = c(
-#             "Probability of Any Mortality" = "#000655",
-#             "Conditional Mortality (given >0)" = "#6b3400"
-#         )
-#     ) +
-#     scale_fill_manual(
-#         name = "Estimate Type",
-#         values = c(
-#             "Probability of Any Mortality" = "#000655",
-#             "Conditional Mortality (given >0)" = "#6b3400"
-#         )
-#     ) +
-#     scale_linetype_manual(
-#         name = "Estimate Type",
-#         values = c(
-#             "Probability of Any Mortality" = "solid",
-#             "Conditional Mortality (given >0)" = "dashed"
-#         )
-#     ) +
-#     # Facets
-#     facet_wrap(~PEAKID, scales = "free_y") +
-#     # Axis labels
-#     labs(x = "Year") +
-#     # Theme
-#     theme_bw() +
-#     theme(
-#         axis.title.y = element_text(color = "#000655"),
-#         axis.title.y.right = element_text(color = "#6b3400"),
-#         legend.position = "bottom",
-#         legend.direction = "horizontal",
-#         legend.key.width = unit(2, "cm"),
-#         strip.text = element_text(face = "bold")
-#     )
-# MortDeaths_gg
-
-# ### Supplement Plot  ------------
