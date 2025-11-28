@@ -399,14 +399,6 @@ plotlist <- lapply(1:length(Dataframes), FUN = function(i) {
 })
 
 ## Plot Fusing & Saving ---------------------------------------------------
-### Supplement -------
-combined <- plot_grid(plotlist = lapply(plotlist, "[[", "Supp"), nrow = 1)
-ggsave(
-    combined,
-    file = paste0(tools::file_path_sans_ext(FName), "_Supplement.png"),
-    width = 20, height = 45
-)
-
 ### Main Text ------
 img <- readPNG(file.path(Dir.Exports, "AreaMap.png")) # replace with your file path
 Map_png <- rasterGrob(img, interpolate = TRUE) # convert to a grob
@@ -421,4 +413,12 @@ ggsave(
     combined,
     file = FName,
     width = 20, height = 22
+)
+
+### Supplement -------
+combined <- plot_grid(plotlist = lapply(plotlist, "[[", "Supp"), nrow = 1)
+ggsave(
+    combined,
+    file = paste0(tools::file_path_sans_ext(FName), "_Supplement.png"),
+    width = 20, height = 45
 )
