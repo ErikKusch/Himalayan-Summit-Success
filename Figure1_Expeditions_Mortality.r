@@ -9,8 +9,9 @@
 #'  - "Himalayan Summit Success - DATA.R"
 #' AUTHOR: [Erik Kusch]
 #' ####################################################################### #
-
 source("Himalayan Summit Success - DATA.r")
+
+message("Figure 1 Plotting")
 FName <- file.path(Dir.Exports, "Figure1_.png")
 
 # PREPARATION =============================================================
