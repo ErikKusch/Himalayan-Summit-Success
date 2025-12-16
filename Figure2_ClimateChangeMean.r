@@ -326,12 +326,63 @@ LinePlots <- lapply(1:nrow(MainVars), FUN = function(i) {
 })
 
 ## Saving Plots -----------------------------------------------------------
+label_row <- function(text) {
+    ggplot() +
+        geom_rect(
+            aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf),
+            fill = "white",
+            color = NA
+        ) +
+        annotate(
+            "text",
+            x = 0, y = 0,
+            label = text,
+            hjust = 0,
+            fontface = "bold",
+            size = 5
+        ) +
+        coord_cartesian(xlim = c(0, 1), ylim = c(-1, 1), clip = "off") +
+        theme_void() +
+        theme(
+            plot.margin = margin(0, 0, 0, 0)
+        )
+}
 ### Main Text +++++++
-main_ggs <- lapply(1:length(MapPlots), FUN = function(x) {
-    plot_grid(MapPlots[[x]], DensPlots[[x]]$All, nrow = 2, rel_heights = c(1, 0.8))
-})
+label_A <- label_row("(A) Air Temperature Change")
+label_B <- label_row("(B) Windspeed Change")
+label_C <- label_row("(C) Snow Cover Change")
+
+main_ggs <- plot_grid(
+    label_A,
+    plot_grid(
+        MapPlots[[1]],
+        DensPlots[[1]]$All,
+        nrow = 2,
+        rel_heights = c(1, 0.8)
+    ),
+    label_B,
+    plot_grid(
+        MapPlots[[2]],
+        DensPlots[[2]]$All,
+        nrow = 2,
+        rel_heights = c(1, 0.8)
+    ),
+    label_C,
+    plot_grid(
+        MapPlots[[3]],
+        DensPlots[[3]]$All,
+        nrow = 2,
+        rel_heights = c(1, 0.8)
+    ),
+    ncol = 1,
+    rel_heights = c(
+        0.08, 1, # A label + plot
+        0.08, 1, # B label + plot
+        0.08, 1 # C label + plot
+    )
+)
 ggsave(
-    plot_grid(plotlist = main_ggs, ncol = 1, labels = c("A", "B", "C")),
+    main_ggs,
     file = FName,
     width = 14, height = 22
 )
