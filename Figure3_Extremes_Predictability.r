@@ -73,16 +73,18 @@ max_cum_ratio <- max(seasonal_df$cum_ratio, na.rm = TRUE)
 scale_factor <- max_cum_avalanches / max_cum_ratio
 
 # Define colors
-primary_color <- "#00505a" # cumulative avalanche X storm line
-secondary_color <- "darkorange" # cumulative ratio line
+primary_color <- "#006D75" # cumulative avalanche X storm line
+secondary_color <- "#750800" # cumulative ratio line
 
 AvaStorm_gg <- ggplot(seasonal_df, aes(x = cum_storms, y = cum_avalanches)) +
   # cumulative avalanche line
-  geom_line(color = primary_color) +
+  geom_line(color = primary_color, size = 1) +
   # death points
   geom_point(aes(size = deaths), colour = primary_color, alpha = 0.6, na.rm = TRUE) +
-  # linear smoother
-  stat_smooth(method = "lm", colour = "#5e0707", na.rm = TRUE) +
+  # linear smoother with multiple confidence intervals
+  stat_smooth(method = "lm", colour = "#832c86", fill = "#832c86", alpha = 0.2, level = 0.95, na.rm = TRUE, size = 0.5) +
+  stat_smooth(method = "lm", colour = "#832c86", fill = "#832c86", alpha = 0.3, level = 0.8, na.rm = TRUE, size = 0.5) +
+  stat_smooth(method = "lm", colour = "#832c86", fill = "#832c86", alpha = 0.4, level = 0.5, na.rm = TRUE, size = 0.5) +
   # year labels
   geom_text_repel(
     data = subset(seasonal_df, !is.na(deaths) & deaths > 0),
@@ -95,13 +97,13 @@ AvaStorm_gg <- ggplot(seasonal_df, aes(x = cum_storms, y = cum_avalanches)) +
     point.padding = 0.5
   ) +
   # cumulative ratio line, scaled
-  geom_line(aes(y = cum_ratio * scale_factor), color = secondary_color, linetype = "dashed") +
+  geom_line(aes(y = cum_ratio * scale_factor), color = secondary_color, linetype = "dashed", size = 1) +
   # primary and secondary y-axis
   scale_y_continuous(
     name = "Cumulative Avalanche Reports",
     sec.axis = sec_axis(
       trans = ~ . / scale_factor,
-      name = "Cumulative Avalanche / Storm Ratio"
+      name = "Cumulative Avalanche / Cumulative Storm Ratio"
     )
   ) +
   scale_size_continuous(name = "Deaths per Season") +
@@ -109,7 +111,7 @@ AvaStorm_gg <- ggplot(seasonal_df, aes(x = cum_storms, y = cum_avalanches)) +
     x = "Cumulative Storm Reports"
   ) +
   theme_bw() +
-  facet_wrap(~SEASON, scales = "free") +
+  facet_wrap(~ factor(SEASON, levels = c("Pre-Monsoon", "Post-Monsoon")), scales = "free", ncol = 2) +
   # color the axis titles
   theme(
     axis.title.y.left = element_text(color = primary_color, size = 12),
@@ -120,7 +122,6 @@ AvaStorm_gg <- ggplot(seasonal_df, aes(x = cum_storms, y = cum_avalanches)) +
     legend.direction = "horizontal"
   ) +
   guides(size = guide_legend(nrow = 1, byrow = TRUE))
-
 
 ## Change in Autocorrelative Coefficient ----------------------------------
 ar_cols <- grep("^AR", names(pred_df), value = TRUE)
@@ -248,7 +249,7 @@ AR_gg <- lapply(MainVars$VarName, FUN = function(i) {
           title.position = "top",
           label.position = "bottom",
           nrow = 1,
-          override.aes = list(size = 1.5, color = "black"),
+          override.aes = list(size = 1, color = "black"),
           keywidth = 4,
           keyheight = 1,
           order = 2
@@ -336,7 +337,7 @@ AR_gg <- lapply(MainVars$VarName, FUN = function(i) {
       ) +
       theme_bw() +
       theme(
-        legend.position = "bottom",
+        legend.position = "top",
         legend.box = "horizontal",
         legend.direction = "horizontal",
         legend.justification = "center",
@@ -357,76 +358,388 @@ AR_gg <- lapply(MainVars$VarName, FUN = function(i) {
 names(AR_gg) <- MainVars$VarName
 
 ## Extremes ---------------------------------------------------------------
-df <- peaks_ts_df %>%
+# Step 1: Filter for main variables and relevant extremes
+df_filtered <- peaks_ts_df %>%
   filter(
-    Variable == "2m_temperature",
+    Variable %in% MainVars$VarName, # limit to main variables
     PeakID %in% eightks_sf$PKNAME,
     Extreme %in% c("HIGH", "LOW")
   ) %>%
   mutate(
-    Year = lubridate::year(Date)
+    Year = year(Date)
   ) %>%
-  arrange(PeakID, Year, Season, Date)
+  arrange(Variable, PeakID, Year, Season, Date)
 
-# Summarise per PeakID, Year, Season
-summary_df <- df %>%
-  group_by(PeakID, Year, Season) %>%
+# Step 2: Compute counts per Variable × PeakID × Year × Season × Extreme
+extreme_counts <- df_filtered %>%
+  group_by(Variable, PeakID, Year, Season, Extreme) %>%
   summarise(
-    Mean_ExtremeRatioHigh = mean(ExtremeRatioHigh, na.rm = TRUE),
-    Count_HIGH = sum(Extreme == "HIGH"),
+    Count = n(),
     .groups = "drop"
+  )
+
+# Step 3: Compute mean extreme ratio per group
+df2 <- peaks_ts_df %>%
+  filter(
+    Variable %in% MainVars$VarName, # limit to main variables
+    PeakID %in% eightks_sf$PKNAME
   ) %>%
-  arrange(PeakID, Season, Year) %>%
-  group_by(PeakID, Season) %>%
   mutate(
-    Cumulative_Count_HIGH = cumsum(Count_HIGH),
-    Cumulative_Mean_ExtremeRatioHigh = cumsum(Mean_ExtremeRatioHigh)
+    Year = year(Date)
   ) %>%
-  ungroup()
+  arrange(Variable, PeakID, Year, Season, Date)
+mean_ratio_df <- df2 %>%
+  group_by(Variable, PeakID, Year, Season) %>%
+  summarise(
+    MeanExtremeRatioHigh = mean(ExtremeRatioHigh, na.rm = TRUE),
+    MeanExtremeRatioLow = mean(ExtremeRatioLow, na.rm = TRUE),
+    .groups = "drop"
+  )
+mean_ratio_long <- mean_ratio_df %>%
+  pivot_longer(
+    cols = c(MeanExtremeRatioHigh, MeanExtremeRatioLow),
+    names_to = "Extreme",
+    values_to = "MeanExtremeRatio"
+  ) %>%
+  mutate(
+    Extreme = case_when(
+      Extreme == "MeanExtremeRatioHigh" ~ "HIGH",
+      Extreme == "MeanExtremeRatioLow" ~ "LOW"
+    )
+  ) %>%
+  arrange(Variable, PeakID, Season, Extreme, Year)
 
-plot_df <- summary_df %>%
-  filter(PeakID == "Annapurna I", Season == "Pre")
+# Step 4: Compute average run length per group
+avg_run_df <- df_filtered %>%
+  group_by(Variable, PeakID, Year, Season, Extreme) %>%
+  arrange(Date) %>% # ensure chronological order
+  summarise(
+    AvgRun = {
+      # convert Date to integer days (numeric)
+      dates_int <- as.integer(as.Date(Date))
+      # identify consecutive runs
+      run_id <- cumsum(c(TRUE, diff(dates_int) != 1))
+      # lengths of each run
+      run_lengths <- table(run_id)
+      # average run length
+      mean(as.numeric(run_lengths))
+    },
+    .groups = "drop"
+  )
 
-ggplot(plot_df, aes(x = Cumulative_Count_HIGH, y = Cumulative_Mean_ExtremeRatioHigh)) +
-  geom_line(color = "steelblue", size = 1) +
-  geom_point(color = "darkred", size = 3) +
-  geom_text(aes(label = Year), vjust = -1, size = 3) +
-  labs(
-    x = "Cumulative Count of HIGH extremes",
-    y = "Cumulative Mean ExtremeRatioHigh",
-    title = "Cumulative HIGH extremes vs ExtremeRatioHigh\nAnnapurna I, Pre season"
-  ) +
-  theme_minimal()
+# Step 5: Merge all summaries into one long-format summary
+all_combinations <- expand_grid(
+  Variable = MainVars$VarName,
+  PeakID = unique(df_filtered$PeakID),
+  Year = unique(df_filtered$Year),
+  Season = c("Pre", "Post"),
+  Extreme = c("HIGH", "LOW")
+)
+summary_long_full <- all_combinations %>%
+  left_join(extreme_counts, by = c("Variable", "PeakID", "Year", "Season", "Extreme")) %>%
+  left_join(mean_ratio_long, by = c("Variable", "PeakID", "Year", "Season", "Extreme")) %>%
+  left_join(avg_run_df, by = c("Variable", "PeakID", "Year", "Season", "Extreme")) %>%
+  # 3. Replace NAs for counts and run length with 0
+  mutate(
+    Count = replace_na(Count, 0),
+    AvgRun = replace_na(AvgRun, 0)
+  ) %>%
+  arrange(Variable, PeakID, Season, Extreme, Year) %>%
+  group_by(Variable, PeakID, Season, Extreme) %>%
+  mutate(
+    Cumulative_Count = cumsum(Count),
+    Cumulative_MeanExtremeRatio = cumsum(MeanExtremeRatio),
+    Cumulative_RunLength = cumsum(AvgRun)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    Season = case_when(
+      Season == "Pre" ~ "Pre-Monsoon",
+      Season == "Post" ~ "Post-Monsoon",
+      TRUE ~ Season
+    ),
+    Season = factor(Season, levels = c("Pre-Monsoon", "Post-Monsoon"))
+  )
+
+## non-cumulative lines
+#### this is supplement!!!!
+extremes_combined <- lapply(MainVars$VarName, FUN = function(var) {
+  # var = "2m_temperature"
+  # Filter data for the current variable
+  plot_data <- summary_long_full %>%
+    filter(Variable == var, Extreme %in% c("LOW", "HIGH"))
+
+  # Compute scaling factor for HIGH relative to LOW
+  low_max <- max(plot_data$MeanExtremeRatio[plot_data$Extreme == "LOW"], na.rm = TRUE)
+  high_max <- max(plot_data$MeanExtremeRatio[plot_data$Extreme == "HIGH"], na.rm = TRUE)
+  scale_factor <- low_max / high_max
+
+  # Create the plot
+  p <- ggplot(plot_data, aes(x = Year, y = MeanExtremeRatio, color = Extreme, shape = Extreme)) +
+    geom_point(size = 2) +
+    # geom_line(aes(group = Extreme)) +
+    # Separate smoothing lines for LOW and HIGH
+    geom_smooth(
+      data = plot_data %>% filter(Extreme == "LOW"),
+      aes(x = Year, y = MeanExtremeRatio),
+      method = "lm", se = FALSE, color = "#003575"
+    ) +
+    geom_smooth(
+      data = plot_data %>% filter(Extreme == "HIGH"),
+      aes(x = Year, y = MeanExtremeRatio),
+      method = "lm", se = FALSE, color = "#754000"
+    ) +
+    facet_grid(PeakID ~ Season) +
+    scale_color_manual(values = c("LOW" = "#003575", "HIGH" = "#754000")) +
+    scale_shape_manual(values = c("LOW" = 25, "HIGH" = 24)) +
+    labs(x = "Year", y = "Ratio of Daily Values to Extreme Threshold (95% Quantile)") +
+    theme_bw() +
+    theme(legend.position = "top") +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "grey50")
+
+  return(p)
+})
+names(extremes_combined) <- MainVars$VarName
+
+## cumulative lines
+### this is main text!!!!
+### Compute linear model stats per Season ---------------------------
+# Nest by Season
+extremes_cumul <- lapply(MainVars$VarName, FUN = function(var) {
+  extremes_ls <- lapply(c("LOW", "HIGH"), FUN = function(extreme) {
+    plot_data <- summary_long_full %>%
+      filter(Extreme == extreme, Variable == var)
+    nested_lm <- plot_data %>%
+      group_by(Season) %>%
+      nest() %>%
+      mutate(
+        lm_count = map(data, ~ lm(Cumulative_Count ~ Year, data = .x)),
+        lm_run   = map(data, ~ lm(Cumulative_RunLength ~ Year, data = .x))
+      )
+
+    # Extract slope and R² for Cumulative_Count safely
+    lm_stats_count <- nested_lm %>%
+      mutate(
+        tidied = map(lm_count, tidy),
+        glanced = map(lm_count, glance)
+      ) %>%
+      unnest(c(tidied, glanced), names_sep = "_") %>%
+      filter(tidied_term == "Year") %>%
+      select(Season, estimate = tidied_estimate, r.squared = glanced_r.squared)
+
+    # Similarly for Cumulative_RunLength
+    lm_stats_run <- nested_lm %>%
+      mutate(
+        tidied = map(lm_run, tidy),
+        glanced = map(lm_run, glance)
+      ) %>%
+      unnest(c(tidied, glanced), names_sep = "_") %>%
+      filter(tidied_term == "Year") %>%
+      select(Season, estimate = tidied_estimate, r.squared = glanced_r.squared)
 
 
-### degree of extreemness +++++++
-### count of extremes +++++++
-### length of extreme runs +++++++
+    # Determine annotation positions
+    # X axis range
+    x_min <- min(plot_data$Year, na.rm = TRUE)
+    x_max <- max(plot_data$Year, na.rm = TRUE)
+    x_range <- x_max - x_min
 
+    # Y axis ranges
+    y_count_min <- min(plot_data$Cumulative_Count, na.rm = TRUE)
+    y_count_max <- max(plot_data$Cumulative_Count, na.rm = TRUE)
+    y_count_range <- y_count_max - y_count_min
 
+    y_run_min <- min(plot_data$Cumulative_RunLength, na.rm = TRUE)
+    y_run_max <- max(plot_data$Cumulative_RunLength, na.rm = TRUE)
+    y_run_range <- y_run_max - y_run_min
+
+    # Pre- and Post-Monsoon positions as percentages of range
+    annotation_positions_count <- tibble(
+      Season = rev(c("Pre-Monsoon", "Post-Monsoon")),
+      x = c(x_min + 0.8 * x_range, x_min + 0.2 * x_range),
+      y = c(y_count_min + 0.2 * y_count_range, y_count_min + 0.8 * y_count_range)
+    )
+
+    annotation_positions_run <- tibble(
+      Season = rev(c("Pre-Monsoon", "Post-Monsoon")),
+      x = c(x_min + 0.8 * x_range, x_min + 0.2 * x_range),
+      y = c(y_run_min + 0.2 * y_run_range, y_run_min + 0.8 * y_run_range)
+    )
+
+    # Merge annotation text
+    annotation_count <- annotation_positions_count %>%
+      left_join(lm_stats_count, by = "Season") %>%
+      mutate(
+        label = paste0(Season, "\nSlope = ", round(estimate, 3), "\nR² = ", round(r.squared, 3))
+      )
+
+    annotation_run <- annotation_positions_run %>%
+      left_join(lm_stats_run, by = "Season") %>%
+      mutate(
+        label = paste0(Season, "\nSlope = ", round(estimate, 3), "\nR² = ", round(r.squared, 3))
+      )
+
+    # Plot 1: Cumulative_Count
+    count_gg <- ggplot(plot_data, aes(x = Year, y = Cumulative_Count, group = PeakID, col = Season)) +
+      geom_point(alpha = 0.5, size = 1.3) +
+      stat_smooth(aes(group = Season, col = Season), method = "lm") +
+      geom_text(
+        data = annotation_count, # precomputed slope/R² labels
+        aes(x = x, y = y, label = label, col = Season),
+        inherit.aes = FALSE,
+        size = 4
+      ) +
+      scale_color_manual(values = c("Pre-Monsoon" = "#003575", "Post-Monsoon" = "#754000")) +
+      theme_bw() +
+      labs(x = "Year", y = "Number of Extreme Events [#]") +
+      theme(
+        strip.text = element_text(face = "bold"),
+        axis.title = element_text(size = 12),
+        legend.position = "none"
+      )
+
+    # Second plot: Cumulative_RunLength
+    run_gg <- ggplot(plot_data, aes(x = Year, y = Cumulative_RunLength, group = PeakID, col = Season)) +
+      geom_point(alpha = 0.5, size = 1.3) +
+      stat_smooth(aes(group = Season, col = Season), method = "lm") +
+      geom_text(
+        data = annotation_run, # precomputed slope/R² labels
+        aes(x = x, y = y, label = label, col = Season),
+        inherit.aes = FALSE,
+        size = 4
+      ) +
+      scale_color_manual(values = c("Pre-Monsoon" = "#6F0075", "Post-Monsoon" = "#067500")) +
+      theme_bw() +
+      labs(x = "Year", y = "Cumulative Run Length (days)") +
+      theme(
+        strip.text = element_text(face = "bold"),
+        axis.title = element_text(size = 12),
+        legend.position = "none"
+      )
+
+    plot_grid(count_gg, run_gg, ncol = 2)
+  })
+  names(extremes_ls) <- c("LOW", "HIGH")
+  extremes_ls
+})
+names(extremes_cumul) <- MainVars$VarName
 
 ## Saving Plots -----------------------------------------------------------
+label_row <- function(text) {
+  ggplot() +
+    geom_rect(
+      aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf),
+      fill = "white",
+      color = NA
+    ) +
+    annotate(
+      "text",
+      x = 0, y = 0,
+      label = text,
+      hjust = 0,
+      fontface = "bold",
+      size = 5
+    ) +
+    coord_cartesian(xlim = c(0, 1), ylim = c(-1, 1), clip = "off") +
+    theme_void() +
+    theme(
+      plot.margin = margin(0, 0, 0, 0)
+    )
+}
 ### Main Text +++++++
-# main_ggs <- lapply(1:length(MapPlots), FUN = function(x) {
-#     plot_grid(MapPlots[[x]], DensPlots[[x]]$All, nrow = 2, rel_heights = c(1, 0.8))
-# })
-# ggsave(
-#     plot_grid(plotlist = main_ggs, ncol = 1, labels = c("A", "B", "C")),
-#     file = FName,
-#     width = 14, height = 22
-# )
+label_A <- label_row("(A) Compound Extremes: Avalanches & Storms")
+label_B <- label_row("(B) Day-to-Day Predictability")
+label_C <- label_row("(C) Low-Temperature Extremes")
+label_D <- label_row("(D) High-Temperature Extremes")
+
+main_ggs <- plot_grid(
+  label_A,
+  AvaStorm_gg,
+  label_B,
+  AR_gg[[1]][[2]]$Density$All,
+  label_C,
+  extremes_cumul[["2m_temperature"]]$LOW,
+  label_D,
+  extremes_cumul[["2m_temperature"]]$HIGH,
+  ncol = 1,
+  rel_heights = c(
+    0.08, 1, # A label + plot
+    0.08, 1, # B label + plot
+    0.08, 1, # C label + plot
+    0.08, 1 # D label + plot
+  )
+)
+ggsave(
+  main_ggs,
+  file = FName,
+  width = 14, height = 22
+)
 
 ### Supplement +++++++
-# ggsave(
-#     plot_grid(plotlist = LinePlots, ncol = 1),
-#     file = paste0(tools::file_path_sans_ext(FName), "_Supplement_LineTrends.png"),
-#     width = 16, height = 22
-# )
+#### AR Line trends per Variable
+lapply(names(AR_gg), FUN = function(x) {
+  # x <- "2m_temperature"
+  plotlist <- lapply(AR_gg[[x]], "[[", "Lines")
+  labellist <- lapply(names(plotlist), FUN = function(y) {
+    label_row(paste0("(", LETTERS[which(names(AR_gg) == x) + 1], ") Day-to-Day Predictability: ", y))
+  })
+  AR_ggsupp <- plot_grid(
+    labellist[[1]],
+    plotlist[[1]],
+    labellist[[2]],
+    plotlist[[2]],
+    labellist[[3]],
+    plotlist[[3]],
+    labellist[[4]],
+    plotlist[[4]],
+    labellist[[5]],
+    plotlist[[5]],
+    ncol = 1,
+    rel_heights = c(
+      0.08, 1, # A label + plot
+      0.08, 1, # B label + plot
+      0.08, 1, # C label + plot
+      0.08, 1, # D label + plot
+      0.08, 1 # E label + plot
+    )
+  )
+  ggsave(
+    AR_ggsupp,
+    file = paste0(tools::file_path_sans_ext(FName), "_Supplement_AR_", x, ".png"),
+    width = 20, height = 22 / 3 * 5
+  )
+})
 
-# lapply(1:length(DensPlots), FUN = function(x) {
-#     ggsave(
-#         DensPlots[[x]]$Indiv,
-#         file = paste0(tools::file_path_sans_ext(FName), "_Supplement_Density_", MainVars$VarName[[x]], ".png"),
-#         width = 16, height = 22
-#     )
-# })
+#### Extreme Ratio Plots
+lapply(names(extremes_combined), FUN = function(x) {
+  # x <- "2m_temperature"
+  ggsave(
+    extremes_combined[[x]],
+    file = paste0(tools::file_path_sans_ext(FName), "_Supplement_ExtremeRatios_", x, ".png"),
+    width = 12, height = 16
+  )
+})
+
+#### Cumulative Extreme Plots
+lapply(names(extremes_cumul), FUN = function(x) {
+  # x <- "windspeed"
+  MainVars$ClearName[MainVars$VarName == x]
+  label_A <- label_row(paste0("(A) Low-", MainVars$ClearName[MainVars$VarName == x], " Extremes"))
+  label_B <- label_row(paste0("(B) High-", MainVars$ClearName[MainVars$VarName == x], " Extremes"))
+  Cumuls_gg <- plot_grid(
+    label_A,
+    extremes_cumul[[x]][["LOW"]],
+    label_B,
+    extremes_cumul[[x]][["HIGH"]],
+    ncol = 1,
+    rel_heights = c(
+      0.08, 1, # A label + plot
+      0.08, 1 # B label + plot
+    )
+  )
+  ggsave(
+    Cumuls_gg,
+    file = paste0(tools::file_path_sans_ext(FName), "_Supplement_CumulativeExtremes", x, ".png"),
+    width = 14, height = 14
+  )
+})

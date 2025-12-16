@@ -17,7 +17,7 @@ packages <- list(
     core = c("readr", "dplyr", "tidyr", "terra", "sf", "sp"),
     viz = c("ggplot2", "viridis", "cowplot", "mapview", "ggrepel", "tidyterra", "ggpubr", "grid", "png"),
     spatial = c("rnaturalearth", "rnaturalearthdata"),
-    stats = c("brms", "tidybayes"),
+    stats = c("brms", "tidybayes", "broom"), # , "purr"
     utils = c("pbapply", "lubridate")
 )
 
@@ -269,7 +269,7 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series.csv"))) {
                 var_long$Extreme[mask & var_long$Value < bounds$Value[bounds$Bound == "Lower"]] <- "LOW"
                 var_long$Extreme[mask & var_long$Value > bounds$Value[bounds$Bound == "Upper"]] <- "HIGH"
                 var_long$ExtremeRatioHigh <- var_long$Value / bounds$Value[bounds$Bound == "Upper"]
-                var_long$ExtremeRatioLow <- var_long$Value / bounds$Value[bounds$Bound == "Lower"]
+                var_long$ExtremeRatioLow <- bounds$Value[bounds$Bound == "Lower"] / var_long$Value
             }
         }
 
