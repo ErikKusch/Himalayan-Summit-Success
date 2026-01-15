@@ -20,7 +20,8 @@ Data_ls <- list(
 
 ### Expeditions over Time -------------------------------------------------
 # Calculate expedition duration and create year column
-Plot_ls <- lapply(Data_ls, FUN = function(ModelData_df) {
+Plot_ls <- lapply(names(Data_ls), FUN = function(Name) {
+    ModelData_df <- Data_ls[[Name]]
     ModelData_df$Duration <- as.numeric(difftime(as.Date(ModelData_df$TERMDATE),
         as.Date(ModelData_df$BCDATE),
         units = "days"
@@ -140,6 +141,7 @@ Plot_ls <- lapply(Data_ls, FUN = function(ModelData_df) {
     names(ExpeditionPlots_ls) <- unique(expedition_counts$type)
 
     ### Proportions of Expeditions over Time ----------------------------------
+
     SeasonCounts_df <- ModelData_df %>%
         count(YEAR, SEASON) %>%
         pivot_wider(
@@ -150,12 +152,16 @@ Plot_ls <- lapply(Data_ls, FUN = function(ModelData_df) {
         )
     SeasonCounts_df$TOTAL <- SeasonCounts_df$Season_1 + SeasonCounts_df$Season_3
     SeasonCounts_df$PROPORTION <- SeasonCounts_df$Season_3 / SeasonCounts_df$TOTAL
-    SeasonsExpeds <- ggplot(
+    # saveRDS(SeasonCounts_df, file = paste0("SeasonExpeds_", Name, ".rds"))
+
+
+    ## raw proportion plot
+    SeasonsExpedsProp <- ggplot(
         SeasonCounts_df,
         aes(x = YEAR, y = PROPORTION)
     ) +
         geom_point() +
-        geom_label_repel(aes(label = TOTAL),
+        ggrepel::geom_label_repel(aes(label = TOTAL),
             box.padding   = 0.35,
             point.padding = 0.5,
             segment.color = "grey50"
@@ -164,10 +170,67 @@ Plot_ls <- lapply(Data_ls, FUN = function(ModelData_df) {
         theme_bw() +
         labs(y = paste("Proportion of Post-Monsoon Season Expeditions"), x = "Year")
 
+    ## changepoint analysis
+    clean_df <- SeasonCounts_df[!is.na(SeasonCounts_df$PROPORTION), ]
+    data_ranks <- rank(clean_df$PROPORTION)
+    res_amoc <- cpt.mean(data_ranks, method = "AMOC")
+    cp_index <- cpts(res_amoc)
+
+    if (length(cp_index) > 0) {
+        # Translate the index back to the actual year from your dataset
+        cp_year <- clean_df$YEAR[cp_index]
+
+        # Calculate medians of the original proportions for reporting
+        median_before <- median(clean_df$PROPORTION[1:cp_index])
+        median_after <- median(clean_df$PROPORTION[(cp_index + 1):nrow(clean_df)])
+
+        cat("--- Median-based Change Point Analysis ---\n")
+        cat("Significant change point found in year:", cp_year, "\n")
+        cat("Median up to (and including)", cp_year, ":", round(median_before, 4), "\n")
+        cat("Median after", cp_year, ":", round(median_after, 4), "\n")
+    } else {
+        cat("No significant change point found in the median.\n")
+    }
+
+    SeasonsExpeds <- ggplot(
+        SeasonCounts_df,
+        aes(x = YEAR, y = PROPORTION)
+    ) +
+        geom_point() +
+        geom_line() +
+        # Add horizontal segments for medians (equivalent to segments())
+        geom_segment(
+            aes(x = min(clean_df$YEAR), xend = cp_year, y = median_before, yend = median_before),
+            color = "blue", linewidth = 1.5 # Note: linewidth instead of lwd for ggplot2
+        ) +
+        geom_segment(
+            aes(x = cp_year, xend = max(clean_df$YEAR), y = median_after, yend = median_after),
+            color = "blue", linewidth = 1.5
+        ) +
+        # Add vertical line at change point (equivalent to abline(v = cp_year))
+        geom_vline(xintercept = cp_year, color = "red", linewidth = 1, linetype = "dashed") +
+        # Add label for change point (equivalent to text())
+        annotate(
+            "text",
+            x = cp_year, y = max(clean_df$PROPORTION),
+            label = paste("Break:", cp_year),
+            hjust = 1.2,
+            color = "red"
+        ) +
+        ggrepel::geom_label_repel(
+            aes(label = TOTAL),
+            box.padding = 0.35,
+            point.padding = 0.5,
+            segment.color = "grey50"
+        ) +
+        theme_bw() +
+        labs(y = "Proportion of Post-Monsoon Season Expeditions", x = "Year")
+
     ## return
     list(
         ExpeditionPlots_ls = ExpeditionPlots_ls,
-        SeasonsExpeds = SeasonsExpeds
+        SeasonsExpeds = SeasonsExpeds,
+        SeasonsExpedsProp = SeasonsExpedsProp
     )
 })
 names(Plot_ls) <- names(Data_ls)
