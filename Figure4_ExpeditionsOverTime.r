@@ -197,7 +197,7 @@ Plot_ls <- lapply(names(Data_ls), FUN = function(Name) {
         aes(x = YEAR, y = PROPORTION)
     ) +
         geom_point() +
-        geom_line() +
+        # geom_line() +
         # Add horizontal segments for medians (equivalent to segments())
         geom_segment(
             aes(x = min(clean_df$YEAR), xend = cp_year, y = median_before, yend = median_before),
