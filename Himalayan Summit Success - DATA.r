@@ -89,8 +89,9 @@ coordinates(summits_sp) <- ~ LON + LAT
 proj4string(summits_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 ## making into sf object
 summits_sf <- st_as_sf(summits_sp)
-eightks_sf <- summits_sf[summits_sf$HEIGHTM >= 8000, ] # used for kriging demonstration
-sevenks_sf <- summits_sf[summits_sf$HEIGHTM >= 7000, ] # used for time series extraction / analyses
+PeakswithEnoughExpeds <- names(table(Expeditions_df$PEAKID[Expeditions_df$YEAR > 1950]))[table(Expeditions_df$PEAKID[Expeditions_df$YEAR > 1950]) > 25]
+eightks_sf <- summits_sf[summits_sf$HEIGHTM >= 8000, ]
+eightks_sf <- eightks_sf[eightks_sf$ID %in% PeakswithEnoughExpeds, ]
 
 ## ERA5-Land Data Download -----------------------------------------
 message("#### Download Data from CDS ##################################")
@@ -99,14 +100,15 @@ Variables_vec <- c(
     "skin_temperature",
     "10m_u_component_of_wind",
     "10m_v_component_of_wind",
-    "snow_cover",
-    "snow_density",
-    "snow_depth",
-    "snow_depth_water_equivalent",
-    "snow_evaporation",
-    "snowfall",
-    "snowmelt",
-    "temperature_of_snow_layer"
+    "snow_cover"
+    # ,
+    # "snow_density",
+    # "snow_depth",
+    # "snow_depth_water_equivalent",
+    # "snow_evaporation",
+    # "snowfall",
+    # "snowmelt",
+    #"temperature_of_snow_layer"
 )
 Years_vec <- 1951:2021
 
@@ -209,12 +211,12 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series.csv"))) {
         VarIter <- CDSData_ls[[VarName]]
         values_mat <- t(terra::extract(
             VarIter,
-            sevenks_sf,
+            eightks_sf,
             method = "bilinear",
             fun = "mean"
         ))
         values_df <- as.data.frame(values_mat[-1, ])
-        colnames(values_df) <- sevenks_sf$PKNAME
+        colnames(values_df) <- eightks_sf$PKNAME
         values_df$Date <- time(VarIter)
         values_df$Variable <- VarName
         values_df$Month <- as.numeric(format(values_df$Date, "%m"))
@@ -229,7 +231,7 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series.csv"))) {
     print("                               ... calculating seasonal bounds")
     seasonal_bounds <- do.call(rbind, pblapply(names(CDSData_ls), FUN = function(VarName) {
         var_df <- peak_ts_ls[[VarName]]
-        do.call(rbind, lapply(sevenks_sf$PKNAME, FUN = function(peak) {
+        do.call(rbind, lapply(eight_sf$PKNAME, FUN = function(peak) {
             data.frame(
                 Variable = VarName,
                 Peak = peak,
@@ -249,7 +251,7 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series.csv"))) {
         var_df <- peak_ts_ls[[VarName]]
         var_long <- tidyr::pivot_longer(
             var_df,
-            cols = sevenks_sf$PKNAME,
+            cols = eightks_sf$PKNAME,
             names_to = "PeakID",
             values_to = "Value"
         )
@@ -370,7 +372,7 @@ message("Fusing Weather and Climate Data with Expedition Data...")
 if (file.exists(file.path(Dir.Exports, "ModelData.csv"))) {
     ModelData_df <- read.csv(file.path(Dir.Exports, "ModelData.csv"))
 } else {
-    Expeditions_df <- Expeditions_df[Expeditions_df$PKNAME %in% sevenks_sf$PKNAME, ] # reduce to only those summits for which we have coordinates, losing 31 rows of data in Expeditions out of a total of 1917
+    Expeditions_df <- Expeditions_df[Expeditions_df$PKNAME %in% eightks_sf$PKNAME, ] # reduce to only those summits for which we have coordinates, losing 31 rows of data in Expeditions out of a total of 1917
     Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$TERMDATE, 1, 4)) > 1950, ] # climate data only available for 1951 onwards, losing a further 5 expeditions
     Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$BCDATE, 1, 4)) < 2022, ] # climate data only available until end of 2021, losing a further 26 expeditions
     Expeditions_df <- Expeditions_df[format(as.Date(Expeditions_df$TERMDATE), "%m") %in% c("03", "04", "05", "09", "10", "11") & format(as.Date(Expeditions_df$BCDATE), "%m") %in% c("03", "04", "05", "09", "10", "11"), ] # make sure data falls into seasons
