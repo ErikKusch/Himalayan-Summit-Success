@@ -1,0 +1,9 @@
+
+Pooled: Pre median=5800m (n=96), Post median=6500m (n=105), Wilcoxon p=0.0000
+
+Per-peak Wilcoxon tests (only peaks with n>=3 in both seasons):
+  Annapurna I          diff=-550m  p=0.2691
+  Dhaulagiri I         diff=+865m  p=0.1444
+  Everest              diff=+1000m  p=0.0000
+  Manaslu              diff=+300m  p=0.0244
+Peaks excluded from testing (n<3 in at least one season):  Cho Oyu, Kangchenjunga Central, Lhotse, Makalu 

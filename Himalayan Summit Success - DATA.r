@@ -14,8 +14,8 @@ rm(list = ls()) # some may not like it, but it helps my workflow
 
 ## Packages ---------------------------------------------------------------
 packages <- list(
-    core = c("readr", "dplyr", "tidyr", "terra", "sf", "sp"),
-    viz = c("ggplot2", "viridis", "cowplot", "mapview", "ggrepel", "tidyterra", "ggpubr", "grid", "png"),
+    core = c("readr", "dplyr", "tidyr", "terra", "sf", "sp", "foreign"),
+    viz = c("ggplot2", "viridis", "cowplot", "mapview", "ggrepel", "tidyterra", "ggpubr", "grid", "png", "patchwork"),
     spatial = c("rnaturalearth", "rnaturalearthdata"),
     stats = c("brms", "tidybayes", "broom", "changepoint"), # , "purr"
     utils = c("pbapply", "lubridate")
@@ -62,42 +62,14 @@ Dirs <- sapply(
 rm(Dirs) # removing temporary variable
 
 ## Project / Analysis Settings --------------------------------------------
+Years_vec <- 1951:2021
+N_Expeds <- 20 # minimum number of expeditions per peak to be included in the analysis
+Min_Height <- 8000 # minimum height of peaks to be included in the analysis
+
 ### Climate Variables Configuration -------
-climate_vars <- data.frame(
-    name = c("2m_temperature", "snow_cover", "snow_depth", "snowfall", "windspeed"),
-    display = c("Air Temperature [K]", "Snow Cover [%]", "Snow Depth [m]", "Snowfall [m]", "Windspeed [m/s]"),
-    subset = TRUE,
-    stringsAsFactors = FALSE
-)
-
-# For backward compatibility
-VNames_vec <- climate_vars$display
-SubsetVariables_vec <- climate_vars$name[climate_vars$subset]
-
-# A. DATA LOADING =========================================================
-message("#### Loading Data from Disk ##################################")
-
-## Expedition DATA -------------------------------------------------
-Expeditions_df <- read.csv(file.path(Dir.Data, "CleanedExpeditions.csv"))
-
-## Summits as Spatial Objects --------------------------------------
-summits_df <- read_csv(file.path(Dir.Data, "selected_peaks_coordinates_counts.csv")) # load positions and names of summits
-summits_df <- summits_df[!duplicated(summits_df$ID), ] # check for duplicates and eventually delete them
-## making sp object of summits
-summits_sp <- summits_df
-coordinates(summits_sp) <- ~ LON + LAT
-proj4string(summits_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
-## making into sf object
-summits_sf <- st_as_sf(summits_sp)
-PeakswithEnoughExpeds <- names(table(Expeditions_df$PEAKID[Expeditions_df$YEAR > 1950]))[table(Expeditions_df$PEAKID[Expeditions_df$YEAR > 1950]) > 25]
-eightks_sf <- summits_sf[summits_sf$HEIGHTM >= 8000, ]
-eightks_sf <- eightks_sf[eightks_sf$ID %in% PeakswithEnoughExpeds, ]
-
-## ERA5-Land Data Download -----------------------------------------
-message("#### Download Data from CDS ##################################")
 Variables_vec <- c(
     "2m_temperature",
-    "skin_temperature",
+    # "skin_temperature",
     "10m_u_component_of_wind",
     "10m_v_component_of_wind",
     "snow_cover"
@@ -108,9 +80,61 @@ Variables_vec <- c(
     # "snow_evaporation",
     # "snowfall",
     # "snowmelt",
-    #"temperature_of_snow_layer"
+    # "temperature_of_snow_layer"
 )
-Years_vec <- 1951:2021
+
+climate_vars <- data.frame(
+    name = c("2m_temperature", "snow_cover", "snow_depth", "snowfall", "windspeed"),
+    display = c("Air Temperature [K]", "Snow Cover [%]", "Snow Depth [m]", "Snowfall [m]", "Windspeed [m/s]"),
+    subset = TRUE,
+    stringsAsFactors = FALSE
+)
+MainVars <- data.frame(
+    VarName = c("2m_temperature", "windspeed", "snow_cover"),
+    ClearName = c("Air Temperature [K]", "Wind Speed [m/s]", "Snow Cover [%]")
+)
+
+### Colours ------
+PreColour <- "#b0c74a"
+PostColour <- "#3f6b8f"
+
+### Death Types ------
+DEATHTYPE_LABELS <- c(
+    `4` = "Fall", `7` = "Avalanche", `6` = "Icefall/\nserac",
+    `8` = "Rockfall", `5` = "Crevasse"
+)
+CAUSE_ORDER <- c("Fall", "Avalanche", "Icefall/\nserac", "Rockfall", "Crevasse")
+
+# A. DATA LOADING =========================================================
+message("#### Loading Data from Disk ##################################")
+
+## Expedition Member Data ------------------------------------------
+members_df <- read.dbf(file.path(Dir.Data, "members.DBF"), as.is = TRUE)
+
+## Expedition DATA -------------------------------------------------
+Expeditions_df <- read.csv(file.path(Dir.Data, "CleanedExpeditions.csv"))
+Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$TERMDATE, 1, 4)) >= Years_vec[1], ] # climate data only available for 1951 onwards, losing a further 5 expeditions; down to 1502 expeditions
+Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$BCDATE, 1, 4)) <= tail(Years_vec, 1), ] # climate data only available until end of 2021, losing a further 26 expeditions; down to 1481 expeditions
+Expeditions_df <- Expeditions_df[format(as.Date(Expeditions_df$TERMDATE), "%m") %in% c("03", "04", "05", "09", "10", "11") & format(as.Date(Expeditions_df$BCDATE), "%m") %in% c("03", "04", "05", "09", "10", "11"), ] # make sure data falls into seasons; down to 1297 expeditions
+
+## Summits as Spatial Objects --------------------------------------
+summits_df <- read_csv(file.path(Dir.Data, "selected_peaks_coordinates_counts.csv")) # load positions and names of summits
+summits_df <- summits_df[!duplicated(summits_df$ID), ] # check for duplicates and eventually delete them
+## making sp object of summits
+summits_sp <- summits_df
+coordinates(summits_sp) <- ~ LON + LAT
+proj4string(summits_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
+## making into sf object
+summits_sf <- st_as_sf(summits_sp)
+PeakswithEnoughExpeds <- names(table(Expeditions_df$PEAKID[Expeditions_df$YEAR > Years_vec[1]]))[table(Expeditions_df$PEAKID[Expeditions_df$YEAR > Years_vec[1]]) > N_Expeds] ## these are the peaks that have enough expeditions to be included in the analysis
+eightks_sf <- summits_sf[summits_sf$HEIGHTM >= Min_Height, ]
+eightks_sf <- eightks_sf[eightks_sf$ID %in% PeakswithEnoughExpeds, ]
+TargetIDs <- eightks_sf$ID ## these are the IDs of the peaks that will be included in the analysis
+
+Expeditions_df <- Expeditions_df[Expeditions_df$PEAKID %in% TargetIDs, ] # reduce to only those summits under study: going from 1917 to 1507 expeditions
+
+## ERA5-Land Data Download -----------------------------------------
+message("#### Download Data from CDS ##################################")
 
 CDSData_ls <- lapply(Variables_vec, FUN = function(Var_Iter) {
     message(Var_Iter)
@@ -372,11 +396,6 @@ message("Fusing Weather and Climate Data with Expedition Data...")
 if (file.exists(file.path(Dir.Exports, "ModelData.csv"))) {
     ModelData_df <- read.csv(file.path(Dir.Exports, "ModelData.csv"))
 } else {
-    Expeditions_df <- Expeditions_df[Expeditions_df$PKNAME %in% eightks_sf$PKNAME, ] # reduce to only those summits for which we have coordinates, losing 31 rows of data in Expeditions out of a total of 1917
-    Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$TERMDATE, 1, 4)) > 1950, ] # climate data only available for 1951 onwards, losing a further 5 expeditions
-    Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$BCDATE, 1, 4)) < 2022, ] # climate data only available until end of 2021, losing a further 26 expeditions
-    Expeditions_df <- Expeditions_df[format(as.Date(Expeditions_df$TERMDATE), "%m") %in% c("03", "04", "05", "09", "10", "11") & format(as.Date(Expeditions_df$BCDATE), "%m") %in% c("03", "04", "05", "09", "10", "11"), ] # make sure data falls into seasons
-
     ModelData_ls <- pblapply(1:nrow(Expeditions_df), FUN = function(expedition) {
         # expedition = 72
         # print(expedition)
@@ -418,7 +437,3 @@ if (file.exists(file.path(Dir.Exports, "ModelData.csv"))) {
 
 # C. ANALYSES & VISUALISATION =============================================
 message("#### Analyses & Visualizations ###############################")
-MainVars <- data.frame(
-    VarName = c("2m_temperature", "windspeed", "snow_cover"),
-    ClearName = c("Air Temperature [K]", "Wind Speed [m/s]", "Snow Cover [%]")
-)
