@@ -103,7 +103,7 @@ DEATHTYPE_LABELS <- c(
     `4` = "Fall", `7` = "Avalanche", `6` = "Icefall/\nserac",
     `8` = "Rockfall", `5` = "Crevasse"
 )
-CAUSE_ORDER <- c("Fall", "Avalanche", "Icefall/\nserac", "Rockfall", "Crevasse")
+CAUSE_ORDER <- c("Avalanche", "Fall", "Crevasse", "Icefall/\nserac", "Rockfall")
 
 # A. DATA LOADING =========================================================
 message("#### Loading Data from Disk ##################################")
@@ -136,6 +136,7 @@ Expeditions_df <- Expeditions_df[Expeditions_df$PEAKID %in% TargetIDs, ] # reduc
 ## ERA5-Land Data Download -----------------------------------------
 message("#### Download Data from CDS ##################################")
 
+stop("here")
 CDSData_ls <- lapply(Variables_vec, FUN = function(Var_Iter) {
     message(Var_Iter)
     if (file.exists(file.path(Dir.Data, paste0(Var_Iter, ".nc")))) {

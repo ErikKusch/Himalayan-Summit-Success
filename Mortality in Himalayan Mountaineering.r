@@ -17,7 +17,7 @@ if (!dir.exists(Dir)) dir.create(Dir, recursive = TRUE)
 
 # BAYESIAN MODEL OF MORTALITY =============================================
 ## Data -------------------------------------------------------------------
-df_data <- ModelData_df <- Expeditions_df
+df_data <- Expeditions_df
 df_data$year_0 <- df_data$YEAR - min(df_data$YEAR) # add year 0 as starting year
 df_data <- df_data %>%
     filter(PEAKID %in% TargetIDs)
@@ -127,7 +127,7 @@ Plots_Cause <- ggplot(panel_a_data, aes(x = cause_label, y = DEATHHGTM)) +
     ) +
     geom_hline(yintercept = 8000, color = "#999999", linewidth = 0.5, linetype = "dotted") +
     annotate("text",
-        x = 5.4, y = 8000, label = "8000 m", angle = 90,
+        x = 5.4, y = 8050, label = "8000 m", angle = 0,
         vjust = -0.4, size = 2.6, color = "#777777"
     ) +
     coord_cartesian(ylim = c(3800, 8600)) +
@@ -231,7 +231,7 @@ Plots_Avalanche <- ggplot(d_plot, aes(x = decade_label, y = DEATHHGTM, fill = se
     scale_color_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
     geom_hline(yintercept = 8000, color = "#999999", linewidth = 0.5, linetype = "dotted") +
     annotate("text",
-        x = 5.4, y = 8000, label = "8000 m", angle = 90,
+        x = 7.3, y = 8050, label = "8000 m", angle = 0,
         vjust = -0.4, size = 2.6, color = "#777777"
     ) +
     coord_cartesian(ylim = c(3800, 8600)) +
