@@ -1,4 +1,4 @@
-FUN.BayesianPlot <- function(plot_ls, ExpedSizes = FALSE, ScaleFac = 1) {
+FUN.BayesianPlot <- function(plot_ls, TotalExped = FALSE, ScaleFac = 1) {
     df <- plot_ls$df
     cols <- plot_ls$cols
     columns <- plot_ls$columns
@@ -53,7 +53,7 @@ FUN.BayesianPlot <- function(plot_ls, ExpedSizes = FALSE, ScaleFac = 1) {
                 values = setNames(c("solid", "dashed"), Names[1:2])
             ) +
             # Facets per PEAKID
-            facet_wrap(~PEAKID, scales = "free_y", ncol = 2) +
+            facet_wrap(~PEAKID, scales = "free_y", ncol = 3) +
             # Labels
             labs(x = "Year") +
             # Theme
@@ -72,18 +72,18 @@ FUN.BayesianPlot <- function(plot_ls, ExpedSizes = FALSE, ScaleFac = 1) {
     Peaks_clean <- lapply(Peaks_ls, function(p) {
         p + theme(legend.position = "none")
     })
-    panel <- plot_grid(plotlist = Peaks_clean, ncol = 2, align = "v") # Vertical stack
+    panel <- plot_grid(plotlist = Peaks_clean, ncol = 3, align = "v") # Vertical stack
     legend <- get_legend(Peaks_ls[[1]]) # Recover legend from first plot
     Supp_gg <- plot_grid(panel, legend, ncol = 1, rel_heights = c(1, 0.02)) # Add outer legend to stack
     # Supp_gg
 
     ### Main Text (for each peakid) -------
-    if (ExpedSizes) { # ExpedSizes flag fixes some scaling for the ExpedSize panel
+    if (TotalExped) { # TotalExped flag fixes some scaling for the ExpedSize panel
         df <- df %>%
             ungroup() %>%
             group_by(.draw, year_0) %>%
             summarise(
-                Var1 = sum(Var1, na.rm = TRUE),
+                Var1 = mean(Var1, na.rm = TRUE),
                 Var2 = sum(Var2, na.rm = TRUE),
                 .groups = "drop"
             )
