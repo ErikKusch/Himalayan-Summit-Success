@@ -262,12 +262,12 @@ Main_gg <- plot_grid(
 ggsave(
     Main_gg,
     filename = file.path(Dir, "Figure_Mortality_in_Himalayan_Mountaineering.png"),
-    width = 36, height = 28, units = "cm", dpi = 600
+    width = 36/1.3, height = 28/1.3, units = "cm", dpi = 600
 )
 
 ## Supplement -------------------------------------------------------------
 ggsave(
     FUN.BayesianPlot(plot_ls = MortDeath, ScaleFac = 3)$Supp,
     filename = file.path(Dir, "SUPP_Mortality_in_Himalayan_Mountaineering.png"),
-    width = 21, height = 42, units = "cm", dpi = 600
+    width = 21, height = 21, units = "cm", dpi = 600
 )
