@@ -88,7 +88,6 @@ MortDeath$df <- MortDeath$df %>%
 Plots_Bayes <- FUN.BayesianPlot(
     plot_ls = MortDeath, ScaleFac = 5
 )
-Plots_Bayes$Main
 
 # MORTALITY BY CAUSE ======================================================
 ## Data -------------------------------------------------------------------
@@ -268,7 +267,7 @@ ggsave(
 
 ## Supplement -------------------------------------------------------------
 ggsave(
-    Plots_Bayes$Supp,
+    FUN.BayesianPlot(plot_ls = MortDeath, ScaleFac = 3)$Supp,
     filename = file.path(Dir, "SUPP_Mortality_in_Himalayan_Mountaineering.png"),
     width = 21, height = 42, units = "cm", dpi = 600
 )
