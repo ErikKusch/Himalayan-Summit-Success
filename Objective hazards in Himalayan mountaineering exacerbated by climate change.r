@@ -62,8 +62,9 @@ mid_x <- seasonal_df %>%
 seasonal_df <- seasonal_df %>%
     left_join(mid_x, by = "SEASON") %>%
     mutate(
-        label_hjust = ifelse(cum_storms > mid_x, 1, 0),
-        label_nudge_x = ifelse(cum_storms > mid_x, -0.5, 0.5)
+        label_hjust = ifelse(SEASON == "Pre-Monsoon", 1, 0),
+        label_vjust = ifelse(SEASON == "Pre-Monsoon", 0, 1),
+        label_nudge_x = ifelse(SEASON == "Pre-Monsoon", -0.9, 0.9)
     )
 seasonal_df <- seasonal_df[!is.na(seasonal_df$SEASON), ]
 
@@ -71,8 +72,47 @@ seasonal_df <- seasonal_df[!is.na(seasonal_df$SEASON), ]
 max_cum_avalanches <- max(seasonal_df$cum_avalanches, na.rm = TRUE)
 max_cum_ratio <- max(seasonal_df$cum_ratio, na.rm = TRUE)
 max_cum_storms <- max(seasonal_df$cum_storms, na.rm = TRUE)
+label_nudge_y <- max_cum_avalanches * 0.04
 scale_factor <- max_cum_avalanches / max_cum_ratio
 time_scale_factor <- max_cum_avalanches / max_cum_storms
+
+seasonal_death_labels_df <- seasonal_df %>%
+    filter(!is.na(deaths) & deaths > 0) %>%
+    arrange(SEASON, YEAR) %>%
+    group_by(SEASON) %>%
+    mutate(
+        label_distance_x = c(10, 10)[(row_number() - 1) %% 2 + 1],
+        label_distance_y = c(1, 1)[(row_number() - 1) %% 2 + 1],
+        label_x = cum_storms + label_nudge_x * label_distance_x,
+        label_y = ifelse(
+            SEASON == "Pre-Monsoon",
+            cum_avalanches + label_nudge_y * label_distance_y,
+            cum_avalanches - label_nudge_y * label_distance_y
+        )
+    ) %>%
+    ungroup()
+
+# manual fixes
+seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][3] <- 0.4
+seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][4] <- 0
+seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][5] <- 0.8
+seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][6] <- 1.6
+seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][7] <- 45
+seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][8] <- 1.6
+seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][9] <- 59
+seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][10] <- 1.6
+
+# while(any(duplicated(seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"]))){
+#     sapply(which(duplicated(seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"])), FUN = function(i){
+#         seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][i] <<- seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][i] - 1
+#     })
+# }
+
+while(any(duplicated(seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Pre-Monsoon"]))){
+    sapply(which(duplicated(seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Pre-Monsoon"])), FUN = function(i){
+        seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Pre-Monsoon"][i] <<- seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Pre-Monsoon"][i] + 1
+    })
+}
 
 ## Plotting ---------------------------------------------------------------
 # (1) ratio of avalanches to storms over time by season
@@ -94,15 +134,17 @@ AvaStormCombined_gg <- ggplot(
     #     size = 0.8,
     #     na.rm = TRUE
     # ) +
-    geom_text_repel(
-        data = subset(seasonal_df, !is.na(deaths) & deaths > 0),
-        aes(label = YEAR, hjust = label_hjust),
-        nudge_x = subset(seasonal_df, !is.na(deaths) & deaths > 0)$label_nudge_x * 2,
-        direction = "both",
-        segment.color = "grey50",
+    geom_segment(
+        data = seasonal_death_labels_df,
+        aes(xend = label_x, yend = label_y),
+        color = "grey50",
+        linewidth = 0.3,
+        show.legend = FALSE
+    ) +
+    geom_text(
+        data = seasonal_death_labels_df,
+        aes(x = label_x, y = label_y, label = YEAR, hjust = label_hjust, vjust = label_vjust),
         size = 3.8,
-        box.padding = 0.8,
-        point.padding = 0.5,
         show.legend = FALSE
     ) +
 #   geom_line(
@@ -154,11 +196,21 @@ AvaStormCombined_gg <- ggplot(
         legend.title = element_text(vjust = 0.5)
     ) +
     guides(
-        color = guide_legend(order = 1, nrow = 1, byrow = TRUE),
-        size = guide_legend(order = 2, nrow = 1, byrow = TRUE),
-        shape = guide_legend(order = 3, nrow = 1, byrow = TRUE)
+        color = guide_legend(
+            order = 1,
+            nrow = 1,
+            byrow = TRUE,
+            override.aes = list(linewidth = 1.8)
+        ),
+        size = guide_legend(order = 2, override.aes = list(shape = 18), nrow = 1, byrow = TRUE),
+        shape = guide_legend(
+            order = 3,
+            nrow = 1,
+            byrow = TRUE,
+            override.aes = list(size = 5)
+        )
     )
-AvaStormCombined_gg
+# AvaStormCombined_gg
 
 # (2) cumulative storms over time by season
 AvaTimeStorms_gg <- ggplot(
@@ -220,7 +272,8 @@ AvaTimeAvalanches_gg <- ggplot(
     lims(x = c(1975, NA))
 AvaTimeAvalanches_gg
 
-# convenience object containing both plots
+## Plot Saving ------------------------------------------------------------
+# convenience object containing all plots
 plot_grid(
     AvaStormCombined_gg,
     plot_grid(
@@ -233,25 +286,11 @@ plot_grid(
     label_size = 12
     )
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ggsave(
+    AvaStormCombined_gg,
+    file = file.path(Dir, "Figure_Objective Hazards.png"),
+    width = 32, height = 24, units = "cm", dpi = 600
+)
 
 # EXTREMES ================================================================
 ## Data -------------------------------------------------------------------
