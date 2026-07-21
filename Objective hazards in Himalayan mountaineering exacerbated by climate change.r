@@ -92,15 +92,23 @@ seasonal_death_labels_df <- seasonal_df %>%
     ) %>%
     ungroup()
 
+while(any(duplicated(seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"]))){
+    sapply(which(duplicated(seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"])), FUN = function(i){
+        seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][i] <<- seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][i] + 20
+    })
+}
 # manual fixes
-seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][3] <- 0.4
-seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][4] <- 0
-seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][5] <- 0.8
-seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][6] <- 1.6
-seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][7] <- 45
-seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][8] <- 1.6
-seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][9] <- 59
-seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][10] <- 1.6
+seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][c(1,2,3)] <- 0
+seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][1] <- 6
+seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"][4] <- 1
+
+seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][9:11] <- seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][9:11] + 1
+
+seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][2] <- 18
+seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][3] <- 27
+seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][6] <- 40
+seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][7] <- 49
+seasonal_death_labels_df$label_x[seasonal_death_labels_df$SEASON == "Post-Monsoon"][9] <- 65
 
 # while(any(duplicated(seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"]))){
 #     sapply(which(duplicated(seasonal_death_labels_df$label_y[seasonal_death_labels_df$SEASON == "Post-Monsoon"])), FUN = function(i){
