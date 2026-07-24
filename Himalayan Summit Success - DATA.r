@@ -144,22 +144,33 @@ CDSData_ls <- lapply(Variables_vec, FUN = function(Var_Iter) {
         return(rast(file.path(Dir.Data, paste0(Var_Iter, ".nc"))))
     }
 
-    Raw_rast <- CDownloadS(
-        Variable = Var_Iter,
-        CumulVar = ifelse(Var_Iter %in% "snowfall", TRUE, FALSE),
-        DataSet = "reanalysis-era5-land",
-        Type = NA,
-        DateStart = paste0(Years_vec[1], "-01-01 00:00"),
-        DateStop = paste0(tail(Years_vec, 1), "-12-31 23:00"),
-        TResolution = "hour",
-        TStep = 1,
-        Extent = ext(c(78.83, 89.33, 25.143, 31.543)),
-        Dir = Dir.Data,
-        FileName = paste0(Var_Iter, "_Raw"),
-        API_User = API_User,
-        API_Key = API_Key,
-        Cores = numberOfCores
-    )
+    while (!fi.exists(file.path(Dir.Data, paste0(Var_Iter, "_Raw.nc")))) {
+        tryCatch(
+            {
+                Raw_rast <- CDownloadS(
+                    Variable = Var_Iter,
+                    CumulVar = ifelse(Var_Iter %in% "snowfall", TRUE, FALSE),
+                    DataSet = "reanalysis-era5-land",
+                    Type = NA,
+                    DateStart = paste0(Years_vec[1], "-01-01 00:00"),
+                    DateStop = paste0(tail(Years_vec, 1), "-12-31 23:00"),
+                    TResolution = "hour",
+                    TStep = 1,
+                    Extent = ext(c(78.83, 89.33, 25.143, 31.543)),
+                    Dir = Dir.Data,
+                    FileName = paste0(Var_Iter, "_Raw"),
+                    API_User = API_User,
+                    API_Key = API_Key,
+                    Cores = numberOfCores
+                )
+            },
+            error = function(e) {
+                message("Error downloading data for ", Var_Iter, ": ", e$message)
+                message("Retrying in 10 seconds...")
+                Sys.sleep(10) # wait for a minute before retrying
+            }
+        )
+    }
 
     Var_data <- KrigR:::Temporal.Aggr(Raw_rast,
         BaseResolution = "hour",
