@@ -75,3 +75,5 @@ Dissemmination/*
 Exports/Raw*
 OlderScripts/*
 .gitignore
+Exports/peaks_time_series_DAILY.rds
+Exports/peaks_time_series_HOURLY.rds

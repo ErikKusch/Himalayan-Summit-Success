@@ -14,8 +14,8 @@ rm(list = ls()) # some may not like it, but it helps my workflow
 
 ## Packages ---------------------------------------------------------------
 packages <- list(
-    core = c("readr", "dplyr", "tidyr", "terra", "sf", "sp", "foreign"),
-    viz = c("ggplot2", "viridis", "cowplot", "mapview", "ggrepel", "tidyterra", "ggpubr", "grid", "png", "patchwork"),
+    core = c("readr", "dplyr", "tidyr", "terra", "sf", "sp"),
+    viz = c("ggplot2", "viridis", "cowplot", "mapview", "ggrepel", "tidyterra", "ggpubr", "grid", "png"),
     spatial = c("rnaturalearth", "rnaturalearthdata"),
     stats = c("brms", "tidybayes", "broom", "changepoint"), # , "purr"
     utils = c("pbapply", "lubridate")
@@ -62,60 +62,23 @@ Dirs <- sapply(
 rm(Dirs) # removing temporary variable
 
 ## Project / Analysis Settings --------------------------------------------
-Years_vec <- 1951:2021
-N_Expeds <- 20 # minimum number of expeditions per peak to be included in the analysis
-Min_Height <- 8000 # minimum height of peaks to be included in the analysis
-
 ### Climate Variables Configuration -------
-Variables_vec <- c(
-    "2m_temperature",
-    # "skin_temperature",
-    "10m_u_component_of_wind",
-    "10m_v_component_of_wind",
-    "snow_cover"
-    # ,
-    # "snow_density",
-    # "snow_depth",
-    # "snow_depth_water_equivalent",
-    # "snow_evaporation",
-    # "snowfall",
-    # "snowmelt",
-    # "temperature_of_snow_layer"
-)
-
 climate_vars <- data.frame(
     name = c("2m_temperature", "snow_cover", "snow_depth", "snowfall", "windspeed"),
     display = c("Air Temperature [K]", "Snow Cover [%]", "Snow Depth [m]", "Snowfall [m]", "Windspeed [m/s]"),
     subset = TRUE,
     stringsAsFactors = FALSE
 )
-MainVars <- data.frame(
-    VarName = c("2m_temperature", "windspeed", "snow_cover"),
-    ClearName = c("Air Temperature [K]", "Wind Speed [m/s]", "Snow Cover [%]")
-)
 
-### Colours ------
-PreColour <- "#b0c74a"
-PostColour <- "#3f6b8f"
-
-### Death Types ------
-DEATHTYPE_LABELS <- c(
-    `4` = "Fall", `7` = "Avalanche", `6` = "Icefall/\nserac",
-    `8` = "Rockfall", `5` = "Crevasse"
-)
-CAUSE_ORDER <- c("Avalanche", "Fall", "Crevasse", "Icefall/\nserac", "Rockfall")
+# For backward compatibility
+VNames_vec <- climate_vars$display
+SubsetVariables_vec <- climate_vars$name[climate_vars$subset]
 
 # A. DATA LOADING =========================================================
 message("#### Loading Data from Disk ##################################")
 
-## Expedition Member Data ------------------------------------------
-members_df <- read.dbf(file.path(Dir.Data, "members.DBF"), as.is = TRUE)
-
 ## Expedition DATA -------------------------------------------------
 Expeditions_df <- read.csv(file.path(Dir.Data, "CleanedExpeditions.csv"))
-Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$TERMDATE, 1, 4)) >= Years_vec[1], ] # climate data only available for 1951 onwards, losing a further 5 expeditions; down to 1502 expeditions
-Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$BCDATE, 1, 4)) <= tail(Years_vec, 1), ] # climate data only available until end of 2021, losing a further 26 expeditions; down to 1481 expeditions
-Expeditions_df <- Expeditions_df[format(as.Date(Expeditions_df$TERMDATE), "%m") %in% c("03", "04", "05", "09", "10", "11") & format(as.Date(Expeditions_df$BCDATE), "%m") %in% c("03", "04", "05", "09", "10", "11"), ] # make sure data falls into seasons; down to 1297 expeditions
 
 ## Summits as Spatial Objects --------------------------------------
 summits_df <- read_csv(file.path(Dir.Data, "selected_peaks_coordinates_counts.csv")) # load positions and names of summits
@@ -126,130 +89,124 @@ coordinates(summits_sp) <- ~ LON + LAT
 proj4string(summits_sp) <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 ## making into sf object
 summits_sf <- st_as_sf(summits_sp)
-PeakswithEnoughExpeds <- names(table(Expeditions_df$PEAKID[Expeditions_df$YEAR > Years_vec[1]]))[table(Expeditions_df$PEAKID[Expeditions_df$YEAR > Years_vec[1]]) > N_Expeds] ## these are the peaks that have enough expeditions to be included in the analysis
-eightks_sf <- summits_sf[summits_sf$HEIGHTM >= Min_Height, ]
+PeakswithEnoughExpeds <- names(table(Expeditions_df$PEAKID[Expeditions_df$YEAR > 1950]))[table(Expeditions_df$PEAKID[Expeditions_df$YEAR > 1950]) > 25]
+eightks_sf <- summits_sf[summits_sf$HEIGHTM >= 8000, ]
 eightks_sf <- eightks_sf[eightks_sf$ID %in% PeakswithEnoughExpeds, ]
-TargetIDs <- eightks_sf$ID ## these are the IDs of the peaks that will be included in the analysis
-
-Expeditions_df <- Expeditions_df[Expeditions_df$PEAKID %in% TargetIDs, ] # reduce to only those summits under study: going from 1917 to 1507 expeditions
 
 ## ERA5-Land Data Download -----------------------------------------
-message("#### Download Data from CDS ##################################")
+if (file.exists(file.path(Dir.Exports, "peaks_time_series_DAILY.rds"))) {
+    message("#### Data already prepared ##################################")
+} else {
+    message("#### Download Data from CDS ##################################")
+    Variables_vec <- c(
+        "2m_temperature",
+        # "skin_temperature",
+        "10m_u_component_of_wind",
+        "10m_v_component_of_wind",
+        "snow_cover"
+        # ,
+        # "snow_density",
+        # "snow_depth",
+        # "snow_depth_water_equivalent",
+        # "snow_evaporation",
+        # "snowfall",
+        # "snowmelt",
+        # "temperature_of_snow_layer"
+    )
+    Years_vec <- 1951:2021
 
-stop("here")
-CDSData_ls <- lapply(Variables_vec, FUN = function(Var_Iter) {
-    message(Var_Iter)
-    if (file.exists(file.path(Dir.Data, paste0(Var_Iter, ".nc")))) {
-        print("Already prepared")
-        return(rast(file.path(Dir.Data, paste0(Var_Iter, ".nc"))))
-    }
+    CDSData_ls <- lapply(Variables_vec, FUN = function(Var_Iter) {
+        message(Var_Iter)
+        if (file.exists(file.path(Dir.Data, paste0(Var_Iter, "_Raw.nc")))) {
+            print("Already prepared")
+            return(rast(file.path(Dir.Data, paste0(Var_Iter, "_Raw.nc"))))
+        }
 
-    while (!fi.exists(file.path(Dir.Data, paste0(Var_Iter, "_Raw.nc")))) {
-        tryCatch(
-            {
-                Raw_rast <- CDownloadS(
-                    Variable = Var_Iter,
-                    CumulVar = ifelse(Var_Iter %in% "snowfall", TRUE, FALSE),
-                    DataSet = "reanalysis-era5-land",
-                    Type = NA,
-                    DateStart = paste0(Years_vec[1], "-01-01 00:00"),
-                    DateStop = paste0(tail(Years_vec, 1), "-12-31 23:00"),
-                    TResolution = "hour",
-                    TStep = 1,
-                    Extent = ext(c(78.83, 89.33, 25.143, 31.543)),
-                    Dir = Dir.Data,
-                    FileName = paste0(Var_Iter, "_Raw"),
-                    API_User = API_User,
-                    API_Key = API_Key,
-                    Cores = numberOfCores
-                )
-            },
-            error = function(e) {
-                message("Error downloading data for ", Var_Iter, ": ", e$message)
-                message("Retrying in 10 seconds...")
-                Sys.sleep(10) # wait for a minute before retrying
-            }
+        while (!file.exists(file.path(Dir.Data, paste0(Var_Iter, "_Raw.nc")))) {
+            tryCatch(
+                {
+                    Raw_rast <- KrigR::CDownloadS(
+                        Variable = Var_Iter,
+                        CumulVar = ifelse(Var_Iter %in% "snowfall", TRUE, FALSE),
+                        DataSet = "reanalysis-era5-land",
+                        Type = NA,
+                        DateStart = paste0(Years_vec[1], "-01-01 00:00"),
+                        DateStop = paste0(tail(Years_vec, 1), "-12-31 23:00"),
+                        TResolution = "hour",
+                        TStep = 1,
+                        Extent = ext(c(78.83, 89.33, 25.143, 31.543)),
+                        Dir = Dir.Data,
+                        FileName = paste0(Var_Iter, "_Raw"),
+                        API_User = API_User,
+                        API_Key = API_Key,
+                        Cores = numberOfCores
+                    )
+                },
+                error = function(e) {
+                    message("Error downloading data for ", Var_Iter, ": ", e$message)
+                    message("Retrying in 10 seconds...")
+                    Sys.sleep(10) # wait for a minute before retrying
+                }
+            )
+        }
+
+        # Var_data <- KrigR:::Temporal.Aggr(Raw_rast,
+        #     BaseResolution = "hour",
+        #     BaseStep = 1,
+        #     TResolution = "day",
+        #     TStep = 1,
+        #     FUN = mean,
+        #     Cores = numberOfCores,
+        #     TZone = "UTC"
+        # )
+        # terra::writeCDF(Var_data, file = file.path(Dir.Data, paste0(Var_Iter, ".nc")))
+        # Var_data
+    })
+    names(CDSData_ls) <- Variables_vec
+
+    stop("here")
+
+    ## Windspeed Calculation -------------------------------------------
+    ### Hourly -------
+    if (!file.exists(file.path(Dir.Data, "windspeed_RAW.nc"))) {
+        RAW_ls <- lapply(c("10m_u_component_of_wind", "10m_v_component_of_wind"),
+            FUN = function(i) rast(file.path(Dir.Data, paste0(i, "_RAW.nc")))
         )
+
+        Indices <- ceiling((1:terra::nlyr(RAW_ls[[1]])) / 2e4)
+        ru_ls <- terra::split(x = RAW_ls[[1]], f = Indices)
+        rv_ls <- terra::split(x = RAW_ls[[2]], f = Indices)
+
+        ret_ls <- pblapply(1:length(ru_ls), FUN = function(BASE_iter) {
+            sqrt(abs(ru_ls[[BASE_iter]])^2 + abs(rv_ls[[BASE_iter]])^2)
+        })
+        Windspeed <- do.call(c, ret_ls)
+        terraOptions(memmax = 10)
+        writeCDF(Windspeed[[1:nlyr(Windspeed) / 2]],
+            filename = file.path(Dir.Data, "windspeed_RAW.nc")
+        )
+        terraOptions(memfrac = .9)
     }
+    CSData_ls$windspeed <- rast(file.path(Dir.Data, "windspeed_RAW.nc"))
 
-    Var_data <- KrigR:::Temporal.Aggr(Raw_rast,
-        BaseResolution = "hour",
-        BaseStep = 1,
-        TResolution = "day",
-        TStep = 1,
-        FUN = mean,
-        Cores = numberOfCores,
-        TZone = "UTC"
-    )
-    terra::writeCDF(Var_data, file = file.path(Dir.Data, paste0(Var_Iter, ".nc")))
-    Var_data
-})
-names(CDSData_ls) <- Variables_vec
+    ## Data Subsetting -------------------------------------------------
+    CDSData_ls <- CDSData_ls[SubsetVariables_vec]
 
-## Windspeed Calculation -------------------------------------------
-### Hourly -------
-# if (!file.exists(file.path(Dir.Data, "windspeed_RAW.nc"))) {
-#     RAW_ls <- lapply(c("10m_u_component_of_wind", "10m_v_component_of_wind"),
-#         FUN = function(i) rast(file.path(Dir.Data, paste0(i, "_RAW.nc")))
-#     )
+    # B. DATA EXTRACTION ======================================================
+    message("#### Extracting Data for Analyses ############################")
 
-#     Indices <- ceiling((1:terra::nlyr(RAW_ls[[1]])) / 2e4)
-#     ru_ls <- terra::split(x = RAW_ls[[1]], f = Indices)
-#     rv_ls <- terra::split(x = RAW_ls[[2]], f = Indices)
-
-#     ret_ls <- pblapply(1:length(ru_ls), FUN = function(BASE_iter) {
-#         sqrt(abs(ru_ls[[BASE_iter]])^2 + abs(rv_ls[[BASE_iter]])^2)
-#     })
-#     Windspeed <- do.call(c, ret_ls)
-#     terraOptions(memmax = 10)
-#     writeCDF(Windspeed[[1:nlyr(Windspeed) / 2]],
-#         filename = file.path(Dir.Data, "windspeed_RAW.nc")
-#     )
-#     terraOptions(memfrac = .9)
-# }
-
-### Daily -------
-if (!file.exists(file.path(Dir.Data, "windspeed.nc"))) {
-    CDSData_ls$windspeed <- sqrt(abs(CDSData_ls$`10m_u_component_of_wind`)^2 +
-        abs(CDSData_ls$`10m_v_component_of_wind`)^2)
-    writeCDF(CDSData_ls$windspeed,
-        filename = file.path(Dir.Data, "windspeed.nc")
-    )
-} else {
-    CDSData_ls$windspeed <- rast(file.path(Dir.Data, "windspeed.nc"))
-}
-varnames(CDSData_ls$windspeed) <- "windspeed"
-
-## Data Subsetting -------------------------------------------------
-CDSData_ls <- CDSData_ls[SubsetVariables_vec]
-
-## Season Definition -----------------------------------------------
-message("#### Splitting Data into Seasons #############################")
-CDS_PreMonsoon_ls <- lapply(CDSData_ls, FUN = function(x) {
-    x[[format(terra::time(CDSData_ls[[1]]), "%m") %in% c("03", "04", "05")]] # March - May
-})
-
-CDS_PostMonsoon_ls <- lapply(CDSData_ls, FUN = function(x) {
-    x[[format(terra::time(CDSData_ls[[1]]), "%m") %in% c("09", "10", "11")]] # September - November
-})
-
-# B. DATA EXTRACTION ======================================================
-message("#### Extracting Data for Analyses ############################")
-
-## Time-Series Extraction for Peaks --------------------------------
-print("Creating time series for peaks...")
-if (file.exists(file.path(Dir.Exports, "peaks_time_series.csv"))) {
-    peaks_ts_df <- read.csv(file.path(Dir.Exports, "peaks_time_series.csv"))
-} else {
+    ## Time-Series Extraction for Peaks --------------------------------
+    print("Creating time series for peaks...")
     ### Extract daily time series -------
     print("                               ... extracting data")
     peak_ts_ls <- pblapply(names(CDSData_ls), FUN = function(VarName) {
         VarIter <- CDSData_ls[[VarName]]
         values_mat <- t(terra::extract(
             VarIter,
-            eightks_sf,
-            method = "bilinear",
-            fun = "mean"
+            eightks_sf
+            # ,
+            # method = "bilinear",
+            # fun = "mean"
         ))
         values_df <- as.data.frame(values_mat[-1, ])
         colnames(values_df) <- eightks_sf$PKNAME
@@ -262,67 +219,103 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series.csv"))) {
         values_df
     })
     names(peak_ts_ls) <- names(CDSData_ls)
+    peak_ts_ls$windspeed <- peak_ts_ls$`10m_u_component_of_wind`
+    peak_ts_ls$windspeed$Variable <- "windspeed"
+    peak_ts_ls$windspeed[, 1:nrow(eightks_sf)] <- sqrt(peak_ts_ls$`10m_u_component_of_wind`[, 1:nrow(eightks_sf)]^2 + peak_ts_ls$`10m_v_component_of_wind`[, 1:nrow(eightks_sf)]^2)
 
     ### Calculate seasonal bounds -------
-    print("                               ... calculating seasonal bounds")
-    seasonal_bounds <- do.call(rbind, pblapply(names(CDSData_ls), FUN = function(VarName) {
-        var_df <- peak_ts_ls[[VarName]]
-        do.call(rbind, lapply(eight_sf$PKNAME, FUN = function(peak) {
-            data.frame(
-                Variable = VarName,
-                Peak = peak,
-                Season = rep(c("Pre", "Post"), each = 2),
-                Bound = rep(c("Lower", "Upper"), 2),
-                Value = c(
-                    quantile(var_df[var_df$Season == "Pre", peak], probs = c(0.05, 0.95), na.rm = TRUE),
-                    quantile(var_df[var_df$Season == "Post", peak], probs = c(0.05, 0.95), na.rm = TRUE)
-                )
-            )
-        }))
-    }))
-
-    ### Create final time series dataframe -------
-    print("                              ... making final data frame")
-    peaks_ts_df <- do.call(rbind, pblapply(names(CDSData_ls), FUN = function(VarName) {
-        var_df <- peak_ts_ls[[VarName]]
-        var_long <- tidyr::pivot_longer(
-            var_df,
-            cols = eightks_sf$PKNAME,
-            names_to = "PeakID",
-            values_to = "Value"
-        )
-        var_long <- var_long[var_long$Season != "Out Of Season", ]
-
-        # Add extreme indicators
-        var_long$Extreme <- "Normal"
-        var_long$ExtremeRatioHigh <- var_long$ExtremeRatioLow <- NA
-        for (peak in unique(var_long$PeakID)) {
-            for (season in c("Pre", "Post")) {
-                bounds <- seasonal_bounds[
-                    seasonal_bounds$Variable == VarName &
-                        seasonal_bounds$Peak == peak &
-                        seasonal_bounds$Season == season,
-                ]
-                mask <- var_long$PeakID == peak & var_long$Season == season
-                var_long$Extreme[mask & var_long$Value < bounds$Value[bounds$Bound == "Lower"]] <- "LOW"
-                var_long$Extreme[mask & var_long$Value > bounds$Value[bounds$Bound == "Upper"]] <- "HIGH"
-                var_long$ExtremeRatioHigh <- var_long$Value / bounds$Value[bounds$Bound == "Upper"]
-                var_long$ExtremeRatioLow <- bounds$Value[bounds$Bound == "Lower"] / var_long$Value
-            }
+    ## loop here twice, once for hourly and once for daily, to get seasonal bounds for both and write final data frames to disk
+    lapply(1:2, FUN = function(i) {
+        if (i == 1) {
+            print("                               ... calculating seasonal bounds for HOURLY data")
+        } else {
+            print("                               ... calculating seasonal bounds for DAILY data")
+            peak_ts_ls <- lapply(peak_ts_ls, FUN = function(x) {
+                ## build daily mean based on Date for the different peaks, assign to new data frame and attach Variable, Month and Season columns with first value for each day
+                x <- x %>%
+                    dplyr::mutate(Day = as.Date(Date)) %>%
+                    dplyr::group_by(Day) %>%
+                    dplyr::summarise(
+                        Variable = dplyr::first(Variable),
+                        Month = dplyr::first(Month),
+                        Season = dplyr::first(Season),
+                        dplyr::across(dplyr::all_of(eightks_sf$PKNAME), ~ mean(.x, na.rm = TRUE)),
+                        .groups = "drop"
+                    ) %>%
+                    dplyr::ungroup() %>%
+                    dplyr::rename(Date = Day) %>%
+                    dplyr::select(dplyr::all_of(eightks_sf$PKNAME), Date, Variable, Month, Season)
+                x
+            })
         }
 
-        var_long
-    }))
+        seasonal_bounds <- do.call(rbind, pblapply(names(peak_ts_ls), FUN = function(VarName) {
+            var_df <- peak_ts_ls[[VarName]]
+            do.call(rbind, lapply(eightks_sf$PKNAME, FUN = function(peak) {
+                data.frame(
+                    Variable = VarName,
+                    Peak = peak,
+                    Season = rep(c("Pre", "Post"), each = 2),
+                    Bound = rep(c("Lower", "Upper"), 2),
+                    Value = c(
+                        quantile(var_df[var_df$Season == "Pre", peak], probs = c(0.05, 0.95), na.rm = TRUE),
+                        quantile(var_df[var_df$Season == "Post", peak], probs = c(0.05, 0.95), na.rm = TRUE)
+                    )
+                )
+            }))
+        }))
 
-    ### Save time series data ---------------------------------------
-    write.csv(
-        peaks_ts_df,
-        file = file.path(Dir.Exports, "peaks_time_series.csv"),
-        row.names = FALSE
-    )
+        ### Create final time series dataframe -------
+        print("                              ... making final data frame")
+        FinalVars <- names(peak_ts_ls) ## but remove 10m_u_component_of_wind and 10m_v_component_of_wind, as they are not needed anymore
+        FinalVars <- FinalVars[!FinalVars %in% c("10m_u_component_of_wind", "10m_v_component_of_wind")]
+        peaks_ts_df <- do.call(rbind, pblapply(FinalVars, FUN = function(VarName) {
+            var_df <- peak_ts_ls[[VarName]]
+            var_long <- tidyr::pivot_longer(
+                var_df,
+                cols = eightks_sf$PKNAME,
+                names_to = "PeakID",
+                values_to = "Value"
+            )
+            var_long <- var_long[var_long$Season != "Out Of Season", ]
+
+            # Add extreme indicators
+            var_long$Extreme <- "Normal"
+            var_long$ExtremeRatioHigh <- var_long$ExtremeRatioLow <- NA
+            for (peak in unique(var_long$PeakID)) {
+                for (season in c("Pre", "Post")) {
+                    bounds <- seasonal_bounds[
+                        seasonal_bounds$Variable == VarName &
+                            seasonal_bounds$Peak == peak &
+                            seasonal_bounds$Season == season,
+                    ]
+                    mask <- var_long$PeakID == peak & var_long$Season == season
+                    var_long$Extreme[mask & var_long$Value < bounds$Value[bounds$Bound == "Lower"]] <- "LOW"
+                    var_long$Extreme[mask & var_long$Value > bounds$Value[bounds$Bound == "Upper"]] <- "HIGH"
+                    var_long$ExtremeRatioHigh <- var_long$Value / bounds$Value[bounds$Bound == "Upper"]
+                    var_long$ExtremeRatioLow <- bounds$Value[bounds$Bound == "Lower"] / var_long$Value
+                }
+            }
+
+            var_long
+        }))
+
+        ## sort by Variable, PeakID, and Date
+        peaks_ts_df <- peaks_ts_df[order(peaks_ts_df$Variable, peaks_ts_df$PeakID, peaks_ts_df$Date), ]
+
+        ### Save time series data ---------------------------------------
+        saveRDS(
+            peaks_ts_df,
+            file = file.path(Dir.Exports, paste0("peaks_time_series_", ifelse(i == 1, "HOURLY", "DAILY"), ".rds"))
+        )
+    }) # temporal resolution lapply
 }
+Peaks_ts_HOURLY_df <- readRDS(file.path(Dir.Exports, "peaks_time_series_HOURLY.rds"))
+Peaks_ts_DAILY_df <- readRDS(file.path(Dir.Exports, "peaks_time_series_DAILY.rds"))
 
 ## Predictability Metrics ------------------------------------------
+stop("CONTINUE HERE")
+
 message("Calculating predictability metrics...")
 
 ar <- function(x, lag = 1) {
@@ -408,6 +401,11 @@ message("Fusing Weather and Climate Data with Expedition Data...")
 if (file.exists(file.path(Dir.Exports, "ModelData.csv"))) {
     ModelData_df <- read.csv(file.path(Dir.Exports, "ModelData.csv"))
 } else {
+    Expeditions_df <- Expeditions_df[Expeditions_df$PKNAME %in% eightks_sf$PKNAME, ] # reduce to only those summits for which we have coordinates, losing 31 rows of data in Expeditions out of a total of 1917
+    Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$TERMDATE, 1, 4)) > 1950, ] # climate data only available for 1951 onwards, losing a further 5 expeditions
+    Expeditions_df <- Expeditions_df[as.numeric(substr(Expeditions_df$BCDATE, 1, 4)) < 2022, ] # climate data only available until end of 2021, losing a further 26 expeditions
+    Expeditions_df <- Expeditions_df[format(as.Date(Expeditions_df$TERMDATE), "%m") %in% c("03", "04", "05", "09", "10", "11") & format(as.Date(Expeditions_df$BCDATE), "%m") %in% c("03", "04", "05", "09", "10", "11"), ] # make sure data falls into seasons
+
     ModelData_ls <- pblapply(1:nrow(Expeditions_df), FUN = function(expedition) {
         # expedition = 72
         # print(expedition)
@@ -449,3 +447,7 @@ if (file.exists(file.path(Dir.Exports, "ModelData.csv"))) {
 
 # C. ANALYSES & VISUALISATION =============================================
 message("#### Analyses & Visualizations ###############################")
+MainVars <- data.frame(
+    VarName = c("2m_temperature", "windspeed", "snow_cover"),
+    ClearName = c("Air Temperature [K]", "Wind Speed [m/s]", "Snow Cover [%]")
+)
