@@ -67,6 +67,7 @@ mainA_peak_data <- peaks_ts_df %>%
     ) %>%
     group_by(Variable, Season, PeakID, Year) %>%
     summarise(Value = mean(Value, na.rm = TRUE), .groups = "drop")
+# summary(peaks_ts_df[peaks_ts_df$PeakID == "Kangchenjunga Central" & peaks_ts_df$Variable == "snow_cover", "Value"]) ## some peaks show no trends as the snow cover is always 100
 
 mainB_peak_data <- pred_df %>%
     filter(Variable %in% climate_vars$name) %>%
@@ -91,44 +92,110 @@ mainAB_trend_summary <- dplyr::bind_rows(
     ungroup()
 
 #' 2. summarise for all peaks to get an overall trend for each variable and season, for both mean and AR1, insert PeakID = "Overall" instead of original PeakID
-mainAB_trend_summaryOverall <- mainAB_trend_summary %>%
-    mutate(PeakID = "Overall") %>%
-    group_by(Variable, Season, PeakID, Metric) %>%
-    summarise(
-        n = sum(n),
-        slope_per_year = mean(slope_per_year, na.rm = TRUE),
-        slope_low_per_year = mean(slope_low_per_year, na.rm = TRUE),
-        slope_high_per_year = mean(slope_high_per_year, na.rm = TRUE),
-        slope_per_decade = mean(slope_per_decade, na.rm = TRUE),
-        slope_low_per_decade = mean(slope_low_per_decade, na.rm = TRUE),
-        slope_high_per_decade = mean(slope_high_per_decade, na.rm = TRUE),
-        p_value = mean(p_value, na.rm = TRUE),
-        pearson_r = mean(pearson_r, na.rm = TRUE),
-        .groups = "drop"
-    )
-trends_df <- rbind(mainAB_trend_summaryOverall, mainAB_trend_summary) %>%
-    arrange(Variable, Season, Metric, PeakID)
+MeanTrendAll <- do.call(rbind, lapply(unique(mainA_peak_data$Variable), FUN = function(y) {
+    do.call(rbind, lapply(
+        unique(mainA_peak_data$Season),
+        FUN = function(x) {
+            # x <- "Pre-Monsoon" # or "Post-Monsoon"
+            df <- mainA_peak_data %>%
+                filter(Variable == y) %>%
+                filter(Season == x) %>%
+                mutate(
+                    Year_c = Year - min(Year),
+                    PeakID = factor(PeakID)
+                )
+
+            m1 <- lmer(Value ~ Year_c + (1 | PeakID), data = df)
+            summary(m1)
+            confint(m1, parm = "Year_c", level = 0.95)
+
+            tibble::tibble(
+                Variable = y,
+                Season = x,
+                PeakID = "Overall",
+                Metric = "Mean",
+                n = nrow(df),
+                slope_per_year = unname(fixef(m1)["Year_c"]),
+                slope_low_per_year = confint(m1, parm = "Year_c", level = 0.95)[1],
+                slope_high_per_year = confint(m1, parm = "Year_c", level = 0.95)[2],
+                slope_per_decade = unname(fixef(m1)["Year_c"]) * 10,
+                slope_low_per_decade = confint(m1, parm = "Year_c", level = 0.95)[1] * 10,
+                slope_high_per_decade = confint(m1, parm = "Year_c", level = 0.95)[2] * 10,
+                p_value = summary(m1)$coefficients["Year_c", "Pr(>|t|)"],
+                pearson_r = NA_real_
+            )
+        }
+    ))
+}))
+
+ARTrendAll <- do.call(rbind, lapply(unique(mainB_peak_data$Variable), FUN = function(y) {
+    do.call(rbind, lapply(
+        unique(mainB_peak_data$Season),
+        FUN = function(x) {
+            # x <- "Pre-Monsoon" # or "Post-Monsoon"
+            df <- mainB_peak_data %>%
+                filter(Variable == y) %>%
+                filter(Season == x) %>%
+                mutate(
+                    Year_c = Year - min(Year),
+                    PeakID = factor(PeakID)
+                )
+
+            m1 <- lmer(Value ~ Year_c + (1 | PeakID), data = df)
+            summary(m1)
+            confint(m1, parm = "Year_c", level = 0.95)
+
+            tibble::tibble(
+                Variable = y,
+                Season = x,
+                PeakID = "Overall",
+                Metric = "AR1",
+                n = nrow(df),
+                slope_per_year = unname(fixef(m1)["Year_c"]),
+                slope_low_per_year = confint(m1, parm = "Year_c", level = 0.95)[1],
+                slope_high_per_year = confint(m1, parm = "Year_c", level = 0.95)[2],
+                slope_per_decade = unname(fixef(m1)["Year_c"]) * 10,
+                slope_low_per_decade = confint(m1, parm = "Year_c", level = 0.95)[1] * 10,
+                slope_high_per_decade = confint(m1, parm = "Year_c", level = 0.95)[2] * 10,
+                p_value = summary(m1)$coefficients["Year_c", "Pr(>|t|)"],
+                pearson_r = NA_real_
+            )
+        }
+    ))
+}))
+
+trends_df <- rbind(MeanTrendAll, ARTrendAll, mainAB_trend_summary)
 ## rename Mean to "Mean Conditions" and AR1 to "Weather Stability" in the Metric column
 trends_df$Metric <- recode(trends_df$Metric, "Mean" = "Mean Conditions", "AR1" = "Weather Stability")
-write.csv(
+## saving file making sure it is properly delimited and that values are not rounded
+write.csv2(
     trends_df,
     file = file.path(Dir, "trend_summary_per_peak.csv"),
     row.names = FALSE
 )
 
 #' 3. make plots of correlation estimate:
-## main text plot, just overall trend with error bars, no individual peaks
+## main text plot, just overall trend with error bars
+pd <- position_dodge(width = 1)
+
 Mean_mainBoxplot_gg <- ggplot(
-    trends_df %>% filter(PeakID != "Overall"),
-    aes(x = Variable, y = slope_per_decade, fill = Season)
+    trends_df %>% filter(PeakID == "Overall"),
+    aes(x = Variable, y = slope_per_decade, color = Season)
 ) +
-    geom_boxplot() +
+    geom_errorbar(aes(ymin = slope_low_per_decade, ymax = slope_high_per_decade), width = 0.6, linewidth = 1, position = pd) +
+    geom_point(size = 4, position = pd, pch = 18) +
     facet_grid2(factor(Metric, levels = c("Mean Conditions", "Weather Stability")) ~ factor(Variable, levels = climate_vars$display), scales = "free", independent = "y") +
-    scale_fill_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
+    scale_color_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
+    geom_text(
+        aes(
+            label = paste0(round(slope_per_decade, 3), " (", ifelse(p_value < 0.05, "*", "NS"), ")"), group = Season
+        ),
+        position = pd, size = 3, vjust = -1, hjust = -0.25, color = "black",
+    ) +
     geom_abline(slope = 0, intercept = 0, linetype = "dashed", color = "grey") +
     labs(
         x = "Variable", y = "Slope per Decade",
-        fill = "Season"
+        color = "Season"
     ) +
     theme_bw() +
     theme(legend.position = "top")
@@ -136,14 +203,15 @@ Mean_mainBoxplot_gg <- ggplot(
 ggsave(
     plot = Mean_mainBoxplot_gg,
     filename = file.path(Dir, "Mean_mainBoxplot.png"),
-    width = 24, height = 16, units = "cm", dpi = 300
+    width = 26, height = 16, units = "cm", dpi = 300
 )
 
 Mean_suppBoxplot_gg <- ggplot(
     trends_df %>% filter(PeakID != "Overall"),
     aes(x = PeakID, y = slope_per_decade, color = Season)
 ) +
-    geom_point(size = 3) +
+    geom_errorbar(aes(ymin = slope_low_per_decade, ymax = slope_high_per_decade), width = 0.6, linewidth = 1, position = pd) +
+    geom_point(size = 4, position = pd, pch = 18) +
     facet_grid2(factor(Metric, levels = c("Mean Conditions", "Weather Stability")) ~ factor(Variable, levels = climate_vars$display), scales = "free", independent = "y") +
     scale_color_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
     geom_abline(slope = 0, intercept = 0, linetype = "dashed", color = "grey") +
@@ -179,75 +247,93 @@ sdA_peak_data <- peaks_ts_df %>%
     group_by(Variable, Season, PeakID, Year) %>%
     summarise(Value = sd(Value, na.rm = TRUE), .groups = "drop")
 
-sdB_peak_data <- pred_df %>%
-    filter(Variable %in% climate_vars$name) %>%
-    filter(PeakID %in% eightks_sf$PKNAME) %>%
-    left_join(climate_vars, by = c("Variable" = "name")) %>%
-    mutate(
-        Season = factor(Season,
-            levels = c("Pre", "Post"),
-            labels = c("Pre-Monsoon", "Post-Monsoon")
-        ),
-        Variable = ifelse(is.na(display), Variable, display)
-    ) %>%
-    group_by(Variable, Season, PeakID, Year) %>%
-    summarise(Value = mean(AR1, na.rm = TRUE), .groups = "drop")
-
 sd_trend_summary <- dplyr::bind_rows(
-    sdA_peak_data %>% mutate(Metric = "SD"),
-    sdB_peak_data %>% mutate(Metric = "AR1")
+    sdA_peak_data %>% mutate(Metric = "SD")
 ) %>%
     group_by(Variable, Season, PeakID, Metric) %>%
     group_modify(~ trend_summary(.x)) %>%
     ungroup()
 
-sd_trend_summaryOverall <- sd_trend_summary %>%
-    mutate(PeakID = "Overall") %>%
-    group_by(Variable, Season, PeakID, Metric) %>%
-    summarise(
-        n = sum(n),
-        slope_per_year = mean(slope_per_year, na.rm = TRUE),
-        slope_low_per_year = mean(slope_low_per_year, na.rm = TRUE),
-        slope_high_per_year = mean(slope_high_per_year, na.rm = TRUE),
-        slope_per_decade = mean(slope_per_decade, na.rm = TRUE),
-        slope_low_per_decade = mean(slope_low_per_decade, na.rm = TRUE),
-        slope_high_per_decade = mean(slope_high_per_decade, na.rm = TRUE),
-        p_value = mean(p_value, na.rm = TRUE),
-        pearson_r = mean(pearson_r, na.rm = TRUE),
-        .groups = "drop"
-    )
 
-sd_trends_df <- rbind(sd_trend_summaryOverall, sd_trend_summary) %>%
-    arrange(Variable, Season, Metric, PeakID)
+# sd_trend_summaryOverall <- dplyr::bind_rows(
+#     sdA_peak_data %>% mutate(Metric = "SD")
+# ) %>%
+#     mutate(PeakID = "Overall") %>%
+#     group_by(Variable, Season, PeakID, Year, Metric) %>%
+#     summarise(Value = sd(Value, na.rm = TRUE), .groups = "drop") %>%
+#     group_by(Variable, Season, PeakID, Metric) %>%
+#     group_modify(~ trend_summary(.x)) %>%
+#     ungroup()
+
+sd_trend_summaryOverall <- do.call(rbind, lapply(unique(sdA_peak_data$Variable), FUN = function(y) {
+    do.call(rbind, lapply(
+        unique(sdA_peak_data$Season),
+        FUN = function(x) {
+            # x <- "Pre-Monsoon" # or "Post-Monsoon"
+            df <- sdA_peak_data %>%
+                filter(Variable == y) %>%
+                filter(Season == x) %>%
+                mutate(
+                    Year_c = Year - min(Year),
+                    PeakID = factor(PeakID)
+                )
+
+            m1 <- lmer(Value ~ Year_c + (1 | PeakID), data = df)
+            summary(m1)
+            confint(m1, parm = "Year_c", level = 0.95)
+
+            tibble::tibble(
+                Variable = y,
+                Season = x,
+                PeakID = "Overall",
+                Metric = "SD",
+                n = nrow(df),
+                slope_per_year = unname(fixef(m1)["Year_c"]),
+                slope_low_per_year = confint(m1, parm = "Year_c", level = 0.95)[1],
+                slope_high_per_year = confint(m1, parm = "Year_c", level = 0.95)[2],
+                slope_per_decade = unname(fixef(m1)["Year_c"]) * 10,
+                slope_low_per_decade = confint(m1, parm = "Year_c", level = 0.95)[1] * 10,
+                slope_high_per_decade = confint(m1, parm = "Year_c", level = 0.95)[2] * 10,
+                p_value = summary(m1)$coefficients["Year_c", "Pr(>|t|)"],
+                pearson_r = NA_real_
+            )
+        }
+    ))
+}))
+
+sd_trends_df <- rbind(sd_trend_summaryOverall, sd_trend_summary)
 sd_trends_df$Metric <- recode(sd_trends_df$Metric, "SD" = "Standard Deviation", "AR1" = "Weather Stability")
 
-write.csv(
+write.csv2(
     sd_trends_df,
     file = file.path(Dir, "trend_summary_sd_per_peak.csv"),
     row.names = FALSE
 )
 
 SD_mainBoxplot_gg <- ggplot(
-    sd_trends_df %>% filter(PeakID != "Overall"),
-    aes(x = Variable, y = slope_per_decade, fill = Season)
+    sd_trends_df %>% filter(PeakID == "Overall"),
+    aes(x = Variable, y = slope_per_decade, color = Season)
 ) +
-    geom_boxplot() +
-    facet_grid2(factor(Metric, levels = c("Standard Deviation", "Weather Stability")) ~ factor(Variable, levels = climate_vars$display), scales = "free", independent = "y") +
-    scale_fill_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
+    geom_errorbar(aes(ymin = slope_low_per_decade, ymax = slope_high_per_decade), width = 0.6, linewidth = 1, position = pd) +
+    geom_point(size = 4, position = pd, pch = 18) +
+    facet_grid2(. ~ factor(Variable, levels = climate_vars$display), scales = "free", independent = "y") +
+    scale_color_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
     geom_abline(slope = 0, intercept = 0, linetype = "dashed", color = "grey") +
     labs(
         x = "Variable", y = "Slope per Decade",
-        fill = "Season"
+        color = "Season"
     ) +
     theme_bw() +
     theme(legend.position = "top")
+SD_mainBoxplot_gg
 
 SD_suppBoxplot_gg <- ggplot(
     sd_trends_df %>% filter(PeakID != "Overall"),
     aes(x = PeakID, y = slope_per_decade, color = Season)
 ) +
-    geom_point(size = 3) +
-    facet_grid2(factor(Metric, levels = c("Standard Deviation", "Weather Stability")) ~ factor(Variable, levels = climate_vars$display), scales = "free", independent = "y") +
+    geom_errorbar(aes(ymin = slope_low_per_decade, ymax = slope_high_per_decade), width = 0.6, linewidth = 1, position = pd) +
+    geom_point(size = 4, position = pd, pch = 18) +
+    facet_grid2(. ~ factor(Variable, levels = climate_vars$display), scales = "free", independent = "y") +
     scale_color_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
     geom_abline(slope = 0, intercept = 0, linetype = "dashed", color = "grey") +
     labs(
