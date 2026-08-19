@@ -15,7 +15,7 @@ rm(list = ls()) # some may not like it, but it helps my workflow
 ## Packages ---------------------------------------------------------------
 packages <- list(
     core = c("readr", "dplyr", "tidyr", "terra", "sf", "sp"),
-    viz = c("ggplot2", "viridis", "cowplot", "mapview", "ggrepel", "tidyterra", "ggpubr", "grid", "png"),
+    viz = c("ggplot2", "viridis", "cowplot", "mapview", "ggrepel", "tidyterra", "ggpubr", "grid", "png", "ggh4x"),
     spatial = c("rnaturalearth", "rnaturalearthdata"),
     stats = c("brms", "tidybayes", "broom", "changepoint"), # , "purr"
     utils = c("pbapply", "lubridate")
@@ -64,8 +64,8 @@ rm(Dirs) # removing temporary variable
 ## Project / Analysis Settings --------------------------------------------
 ### Climate Variables Configuration -------
 climate_vars <- data.frame(
-    name = c("2m_temperature", "snow_cover", "snow_depth", "snowfall", "windspeed"),
-    display = c("Air Temperature [K]", "Snow Cover [%]", "Snow Depth [m]", "Snowfall [m]", "Windspeed [m/s]"),
+    name = c("2m_temperature", "snow_cover", "windspeed"),
+    display = c("Air Temperature [K]", "Snow Cover [%]", "Windspeed [m/s]"),
     subset = TRUE,
     stringsAsFactors = FALSE
 )
@@ -73,6 +73,10 @@ climate_vars <- data.frame(
 # For backward compatibility
 VNames_vec <- climate_vars$display
 SubsetVariables_vec <- climate_vars$name[climate_vars$subset]
+
+### Plotting Settings ------
+PreColour <- "#AEC647"
+PostColour <- "#3F6B8F"
 
 # A. DATA LOADING =========================================================
 message("#### Loading Data from Disk ##################################")
@@ -164,33 +168,31 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series_DAILY.rds"))) {
     })
     names(CDSData_ls) <- Variables_vec
 
-    stop("here")
+    # ## Windspeed Calculation -------------------------------------------
+    # ### Hourly -------
+    # if (!file.exists(file.path(Dir.Data, "windspeed_RAW.nc"))) {
+    #     RAW_ls <- lapply(c("10m_u_component_of_wind", "10m_v_component_of_wind"),
+    #         FUN = function(i) rast(file.path(Dir.Data, paste0(i, "_RAW.nc")))
+    #     )
 
-    ## Windspeed Calculation -------------------------------------------
-    ### Hourly -------
-    if (!file.exists(file.path(Dir.Data, "windspeed_RAW.nc"))) {
-        RAW_ls <- lapply(c("10m_u_component_of_wind", "10m_v_component_of_wind"),
-            FUN = function(i) rast(file.path(Dir.Data, paste0(i, "_RAW.nc")))
-        )
+    #     Indices <- ceiling((1:terra::nlyr(RAW_ls[[1]])) / 2e4)
+    #     ru_ls <- terra::split(x = RAW_ls[[1]], f = Indices)
+    #     rv_ls <- terra::split(x = RAW_ls[[2]], f = Indices)
 
-        Indices <- ceiling((1:terra::nlyr(RAW_ls[[1]])) / 2e4)
-        ru_ls <- terra::split(x = RAW_ls[[1]], f = Indices)
-        rv_ls <- terra::split(x = RAW_ls[[2]], f = Indices)
-
-        ret_ls <- pblapply(1:length(ru_ls), FUN = function(BASE_iter) {
-            sqrt(abs(ru_ls[[BASE_iter]])^2 + abs(rv_ls[[BASE_iter]])^2)
-        })
-        Windspeed <- do.call(c, ret_ls)
-        terraOptions(memmax = 10)
-        writeCDF(Windspeed[[1:nlyr(Windspeed) / 2]],
-            filename = file.path(Dir.Data, "windspeed_RAW.nc")
-        )
-        terraOptions(memfrac = .9)
-    }
-    CSData_ls$windspeed <- rast(file.path(Dir.Data, "windspeed_RAW.nc"))
+    #     ret_ls <- pblapply(1:length(ru_ls), FUN = function(BASE_iter) {
+    #         sqrt(abs(ru_ls[[BASE_iter]])^2 + abs(rv_ls[[BASE_iter]])^2)
+    #     })
+    #     Windspeed <- do.call(c, ret_ls)
+    #     terraOptions(memmax = 10)
+    #     writeCDF(Windspeed[[1:nlyr(Windspeed) / 2]],
+    #         filename = file.path(Dir.Data, "windspeed_RAW.nc")
+    #     )
+    #     terraOptions(memfrac = .9)
+    # }
+    # CSData_ls$windspeed <- rast(file.path(Dir.Data, "windspeed_RAW.nc"))
 
     ## Data Subsetting -------------------------------------------------
-    CDSData_ls <- CDSData_ls[SubsetVariables_vec]
+    # CDSData_ls <- CDSData_ls[SubsetVariables_vec]
 
     # B. DATA EXTRACTION ======================================================
     message("#### Extracting Data for Analyses ############################")
@@ -314,8 +316,6 @@ Peaks_ts_HOURLY_df <- readRDS(file.path(Dir.Exports, "peaks_time_series_HOURLY.r
 Peaks_ts_DAILY_df <- readRDS(file.path(Dir.Exports, "peaks_time_series_DAILY.rds"))
 
 ## Predictability Metrics ------------------------------------------
-stop("CONTINUE HERE")
-
 message("Calculating predictability metrics...")
 
 ar <- function(x, lag = 1) {
@@ -338,8 +338,8 @@ ar <- function(x, lag = 1) {
 if (file.exists(file.path(Dir.Exports, "peaks_predictability.csv"))) {
     pred_df <- read.csv(file.path(Dir.Exports, "peaks_predictability.csv"))
 } else {
-    pred_df <- do.call(rbind, pblapply(unique(peaks_ts_df$PeakID), FUN = function(peak) {
-        peak_data <- peaks_ts_df[peaks_ts_df$PeakID == peak, ]
+    pred_df <- do.call(rbind, pblapply(unique(Peaks_ts_DAILY_df$PeakID), FUN = function(peak) {
+        peak_data <- Peaks_ts_DAILY_df[Peaks_ts_DAILY_df$PeakID == peak, ]
 
         do.call(rbind, lapply(unique(peak_data$Variable), FUN = function(var) {
             var_data <- peak_data[peak_data$Variable == var, ]
@@ -410,10 +410,10 @@ if (file.exists(file.path(Dir.Exports, "ModelData.csv"))) {
         # expedition = 72
         # print(expedition)
         Iter_df <- Expeditions_df[expedition, ]
-        weather_df <- peaks_ts_df[
-            peaks_ts_df$PeakID == Iter_df$PKNAME &
-                peaks_ts_df$Date >= as.Date(Iter_df$BCDATE) &
-                peaks_ts_df$Date <= as.Date(Iter_df$TERMDATE),
+        weather_df <- Peaks_ts_DAILY_df[
+            Peaks_ts_DAILY_df$PeakID == Iter_df$PKNAME &
+                Peaks_ts_DAILY_df$Date >= as.Date(Iter_df$BCDATE) &
+                Peaks_ts_DAILY_df$Date <= as.Date(Iter_df$TERMDATE),
         ]
         unique(weather_df$Season)
 
