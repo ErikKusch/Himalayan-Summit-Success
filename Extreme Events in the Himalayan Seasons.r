@@ -179,9 +179,15 @@ seg_len <- 1.6 # length of each dashed segment
 
 make_trend_annotations <- function(peak_data) {
     max_year <- max(peak_data$Year, na.rm = TRUE)
-    x_start <- max_year + seg_gap + (seg_len + 0.4)
-    x_end <- x_start + seg_len
-    x_mid <- (x_start + x_end) / 2
+    ## Pre- and Post-Monsoon get horizontally offset columns so their
+    ## arrows and Δ labels never overlap even when y-values are close.
+    ## Pre: left column,  Post: right column (each seg_len wide, seg_gap apart)
+    x_start_pre <- max_year + seg_gap
+    x_end_pre <- x_start_pre + seg_len
+    x_mid_pre <- (x_start_pre + x_end_pre) / 2
+    x_start_post <- x_end_pre + 1.2
+    x_end_post <- x_start_post + seg_len
+    x_mid_post <- (x_start_post + x_end_post) / 2
 
     peak_data %>%
         group_by(Variable, Season) %>%
@@ -195,7 +201,11 @@ make_trend_annotations <- function(peak_data) {
             tibble::tibble(trend_start = pred[1], trend_end = pred[2], diff = pred[2] - pred[1])
         }) %>%
         ungroup() %>%
-        mutate(x_start = x_start, x_end = x_end, x_mid = x_mid)
+        mutate(
+            x_start = ifelse(Season == "Pre-Monsoon", x_start_pre, x_start_post),
+            x_end   = ifelse(Season == "Pre-Monsoon", x_end_pre, x_end_post),
+            x_mid   = ifelse(Season == "Pre-Monsoon", x_mid_pre, x_mid_post)
+        )
 }
 
 ## y_max:       optional upper y-axis cap
@@ -225,14 +235,19 @@ plot_metric <- function(peak_data, y_label, y_max = NA, diff_digits = 2) {
             inherit.aes = TRUE
         ) +
         geom_text(
-            data = annotations,
+            data = annotations %>% filter(Season == "Post-Monsoon"),
             aes(x = x_mid, y = pmax(trend_start, trend_end), label = sprintf(diff_fmt, diff)),
             vjust = -0.6, size = 3, fontface = "bold", show.legend = FALSE, inherit.aes = TRUE
+        ) +
+        geom_text(
+            data = annotations %>% filter(Season == "Pre-Monsoon"),
+            aes(x = x_mid, y = pmin(trend_start, trend_end), label = sprintf(diff_fmt, diff)),
+            vjust = 1.6, size = 3, fontface = "bold", show.legend = FALSE, inherit.aes = TRUE
         ) +
         scale_fill_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
         scale_color_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
         scale_x_continuous(
-            expand = expansion(mult = c(0.02, 0), add = c(0, seg_gap + 2 * seg_len + 1)),
+            expand = expansion(mult = c(0.02, 0), add = c(0, seg_gap + 2 * seg_len + 1.2 + seg_len + 1)),
             breaks = scales::breaks_pretty()(range(peak_data$Year)),
             labels = function(x) ifelse(x >= min(peak_data$Year) & x <= max_year, x, "")
         ) +
@@ -248,25 +263,39 @@ plot_metric <- function(peak_data, y_label, y_max = NA, diff_digits = 2) {
 }
 
 ggsave(
-    plot = plot_metric(count_HIGH, y_label = "N Extreme Days (HIGH)"),
-    filename = file.path(Dir, "Figure_NExtremes_HIGH.png"),
-    width = 32, height = 19, units = "cm", dpi = 300
+    plot = plot_grid(
+        plot_metric(count_HIGH, y_label = "N Extreme Days (HIGH)") +
+            theme(legend.position = "none"),
+        plot_metric(count_LOW, y_label = "N Extreme Days (LOW)"),
+        labels = c("A", "B"), label_size = 16, ncol = 1, align = "v"
+    ),
+    filename = file.path(Dir, "SUPP_NExtremes.png"),
+    width = 32, height = 26, units = "cm", dpi = 300
 )
 
 ggsave(
-    plot = plot_metric(count_LOW, y_label = "N Extreme Days (LOW)"),
-    filename = file.path(Dir, "Figure_NExtremes_LOW.png"),
-    width = 32, height = 19, units = "cm", dpi = 300
+    plot = plot_grid(
+        plot_metric(runlen_HIGH, y_label = "Mean Run Length (HIGH) [days]") +
+            theme(legend.position = "none"),
+        plot_metric(runlen_LOW, y_label = "Mean Run Length (LOW) [days]"),
+        labels = c("A", "B"), label_size = 16, ncol = 1, align = "v"
+    ),
+    filename = file.path(Dir, "SUPP_RunLength.png"),
+    width = 32, height = 26, units = "cm", dpi = 300
 )
 
-ggsave(
-    plot = plot_metric(runlen_HIGH, y_label = "Mean Run Length (HIGH) [days]"),
-    filename = file.path(Dir, "Figure_RunLength_HIGH.png"),
-    width = 32, height = 19, units = "cm", dpi = 300
-)
 
-ggsave(
-    plot = plot_metric(runlen_LOW, y_label = "Mean Run Length (LOW) [days]"),
-    filename = file.path(Dir, "Figure_RunLength_LOW.png"),
-    width = 32, height = 19, units = "cm", dpi = 300
-)
+#' this here explains why there are no trendlines for pre-monsoon season high snow cover: the upper bound is simply almost the same as the maximum value of the data
+var_df <- peaks_ts_df[peaks_ts_df$Variable == "snow_cover", ]
+do.call(rbind, lapply(eightks_sf$PKNAME, FUN = function(peak) {
+    data.frame(
+        Variable = "snow_cover",
+        Peak = peak,
+        Season = rep(c("Pre", "Post"), each = 2),
+        Bound = rep(c("Lower", "Upper"), 2),
+        Value = c(
+            quantile(var_df[var_df$Season == "Pre" & var_df$PeakID == peak, "Value"], probs = c(0.05, 0.95), na.rm = TRUE),
+            quantile(var_df[var_df$Season == "Post" & var_df$PeakID == peak, "Value"], probs = c(0.05, 0.95), na.rm = TRUE)
+        )
+    )
+}))

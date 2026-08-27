@@ -141,10 +141,16 @@ seg_len <- 1.6 # length of each dashed segment
 
 ## helper: build the lm-endpoint annotation data for a peak data frame
 make_trend_annotations <- function(peak_data) {
-    max_year <- max(peak_data$Year)
-    x_start <- max_year + seg_gap + (seg_len + 0.4)
-    x_end <- x_start + seg_len
-    x_mid <- (x_start + x_end) / 2
+    max_year <- max(peak_data$Year, na.rm = TRUE)
+    ## Pre- and Post-Monsoon get horizontally offset columns so their
+    ## arrows and Δ labels never overlap even when y-values are close.
+    ## Pre: left column,  Post: right column (each seg_len wide, seg_gap apart)
+    x_start_pre  <- max_year + seg_gap
+    x_end_pre    <- x_start_pre + seg_len
+    x_mid_pre    <- (x_start_pre + x_end_pre) / 2
+    x_start_post <- x_end_pre + 1.2
+    x_end_post   <- x_start_post + seg_len
+    x_mid_post   <- (x_start_post + x_end_post) / 2
 
     peak_data %>%
         group_by(Variable, Season) %>%
@@ -154,7 +160,11 @@ make_trend_annotations <- function(peak_data) {
             tibble::tibble(trend_start = pred[1], trend_end = pred[2], diff = pred[2] - pred[1])
         }) %>%
         ungroup() %>%
-        mutate(x_start = x_start, x_end = x_end, x_mid = x_mid)
+        mutate(
+            x_start = ifelse(Season == "Pre-Monsoon", x_start_pre,  x_start_post),
+            x_end   = ifelse(Season == "Pre-Monsoon", x_end_pre,    x_end_post),
+            x_mid   = ifelse(Season == "Pre-Monsoon", x_mid_pre,    x_mid_post)
+        )
 }
 
 ## helper: produce the full annotated facet plot for one metric
@@ -185,14 +195,19 @@ plot_metric <- function(peak_data, y_label, y_max = NA, diff_digits = 2) {
             inherit.aes = TRUE
         ) +
         geom_text(
-            data = annotations,
+            data = annotations %>% filter(Season == "Post-Monsoon"),
             aes(x = x_mid, y = pmax(trend_start, trend_end), label = sprintf(diff_fmt, diff)),
             vjust = -0.6, size = 3, fontface = "bold", show.legend = FALSE, inherit.aes = TRUE
+        ) +
+        geom_text(
+            data = annotations %>% filter(Season == "Pre-Monsoon"),
+            aes(x = x_mid, y = pmin(trend_start, trend_end), label = sprintf(diff_fmt, diff)),
+            vjust = 1.6, size = 3, fontface = "bold", show.legend = FALSE, inherit.aes = TRUE
         ) +
         scale_fill_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
         scale_color_manual(values = c("Pre-Monsoon" = PreColour, "Post-Monsoon" = PostColour)) +
         scale_x_continuous(
-            expand = expansion(mult = c(0.02, 0), add = c(0, seg_gap + 2 * seg_len + 1)),
+            expand = expansion(mult = c(0.02, 0), add = c(0, seg_gap + 2 * seg_len + 1.2 + seg_len + 1)),
             breaks = scales::breaks_pretty()(range(peak_data$Year)),
             labels = function(x) ifelse(x >= min(peak_data$Year) & x <= max_year, x, "")
         ) +
@@ -203,7 +218,7 @@ plot_metric <- function(peak_data, y_label, y_max = NA, diff_digits = 2) {
         theme(
             legend.position  = "bottom",
             legend.direction = "horizontal",
-            legend.base_size = 12
+            legend.text      = element_text(size = 12)
         )
 }
 

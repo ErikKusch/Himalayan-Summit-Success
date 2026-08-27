@@ -266,6 +266,7 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series_DAILY.rds"))) {
                 )
             }))
         }))
+        # print(seasonal_bounds)
 
         ### Create final time series dataframe -------
         print("                              ... making final data frame")
