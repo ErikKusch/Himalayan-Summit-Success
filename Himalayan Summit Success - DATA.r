@@ -17,7 +17,7 @@ packages <- list(
     core = c("readr", "dplyr", "tidyr", "terra", "sf", "sp"),
     viz = c("ggplot2", "viridis", "cowplot", "mapview", "ggrepel", "tidyterra", "ggpubr", "grid", "png", "ggh4x"),
     spatial = c("rnaturalearth", "rnaturalearthdata"),
-    stats = c("brms", "tidybayes", "broom", "changepoint", "lme4, "lmerTest"), # , "purr"
+    stats = c("brms", "tidybayes", "broom", "changepoint", "lme4", "lmerTest"), # , "purr"
     utils = c("pbapply", "lubridate")
 )
 
