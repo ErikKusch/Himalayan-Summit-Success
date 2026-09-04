@@ -96,6 +96,8 @@ summits_sf <- st_as_sf(summits_sp)
 PeakswithEnoughExpeds <- names(table(Expeditions_df$PEAKID[Expeditions_df$YEAR > 1950]))[table(Expeditions_df$PEAKID[Expeditions_df$YEAR > 1950]) > 25]
 eightks_sf <- summits_sf[summits_sf$HEIGHTM >= 8000, ]
 eightks_sf <- eightks_sf[eightks_sf$ID %in% PeakswithEnoughExpeds, ]
+TargetIDs <- eightks_sf$ID
+Years_vec <- 1951:2021
 
 ## ERA5-Land Data Download -----------------------------------------
 if (file.exists(file.path(Dir.Exports, "peaks_time_series_DAILY.rds"))) {
@@ -117,7 +119,6 @@ if (file.exists(file.path(Dir.Exports, "peaks_time_series_DAILY.rds"))) {
         # "snowmelt",
         # "temperature_of_snow_layer"
     )
-    Years_vec <- 1951:2021
 
     CDSData_ls <- lapply(Variables_vec, FUN = function(Var_Iter) {
         message(Var_Iter)

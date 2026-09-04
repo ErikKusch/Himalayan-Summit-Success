@@ -10,7 +10,7 @@
 #'  - "PlottingFunctions.r"
 #' AUTHOR: [Erik Kusch]
 #' ####################################################################### #
-# source("Himalayan Summit Success - DATA.r")
+source("Himalayan Summit Success - DATA.r")
 source("PlottingFunctions.r")
 Dir <- file.path(Dir.Exports, "Mortality in Himalayan Mountaineering")
 if (!dir.exists(Dir)) dir.create(Dir, recursive = TRUE)
@@ -29,6 +29,10 @@ df_data$YearBin <- cut(
     right = FALSE,
     labels = paste0(breaks[-length(breaks)], ":", breaks[-1])
 )
+
+min(as.Date(df_data$BCDATE))
+max(as.Date(df_data$TERMDATE))
+
 ## Actual Model -----------------------------------------------------------
 if (file.exists(file.path(Dir.Exports, "model_MT.RData"))) {
     load(file.path(Dir.Exports, "model_MT.RData"))
@@ -262,7 +266,7 @@ Main_gg <- plot_grid(
 ggsave(
     Main_gg,
     filename = file.path(Dir, "Figure_Mortality_in_Himalayan_Mountaineering.png"),
-    width = 36/1.3, height = 28/1.3, units = "cm", dpi = 600
+    width = 36 / 1.3, height = 28 / 1.3, units = "cm", dpi = 600
 )
 
 ## Supplement -------------------------------------------------------------
