@@ -39,7 +39,7 @@ if (file.exists(file.path(Dir.Exports, "model_MT.RData"))) {
 } else {
     model_MT <- brm(
         bf(
-            Mortality_all ~ year_0 + (year_0 | PEAKID), # random intercepts & slopes per peak
+            Mortality_all ~ year_0 +  + (year_0 | PEAKID), # random intercepts & slopes per peak
             phi ~ 1, # constant precision
             zoi ~ year_0 + (year_0 | PEAKID) # model zero/one inflation similarly
         ),
@@ -93,9 +93,107 @@ Plots_Bayes <- FUN.BayesianPlot(
     plot_ls = MortDeath, ScaleFac = 5
 )
 
+# BAYESIAN MODEL OF MORTALITY CONTROLLING FOR EXPEDITION SIZES ============
+## Data -------------------------------------------------------------------
+df_data <- Expeditions_df
+df_data$year_0 <- df_data$YEAR - min(df_data$YEAR) # add year 0 as starting year
+df_data <- df_data %>%
+    filter(PEAKID %in% TargetIDs)
+breaks <- seq(Years_vec[1], tail(Years_vec, 1), by = 10)
+df_data$YearBin <- cut(
+    df_data$YEAR,
+    breaks = breaks,
+    include.lowest = TRUE,
+    right = FALSE,
+    labels = paste0(breaks[-length(breaks)], ":", breaks[-1])
+)
+
+min(as.Date(df_data$BCDATE))
+max(as.Date(df_data$TERMDATE))
+
+## Actual Model -----------------------------------------------------------
+if (file.exists(file.path(Dir.Exports, "model_MTExpedControl.RData"))) {
+    load(file.path(Dir.Exports, "model_MTExpedControl.RData"))
+} else {
+    model_MTExped <- brm(
+        bf(
+            Mortality_all ~ year_0 + TOTMEMBERS + (year_0 | PEAKID), # random intercepts & slopes per peak
+            phi ~ 1, # constant precision
+            zoi ~ year_0 + (year_0 | PEAKID) # model zero/one inflation similarly
+        ),
+        data = df_data,
+        family = zero_one_inflated_beta(),
+        chains = 4,
+        cores = 4,
+        iter = 10000,
+        warmup = 5000,
+        inits = "0",
+        seed = 123,
+        control = list(adapt_delta = 0.95, max_treedepth = 15)
+    )
+    save(model_MTExped, file = file.path(Dir.Exports, "model_MTExpedControl.RData"))
+}
+# summary(model_MTExped)
+# pp_check(model_MTExped, ndraws = 500)
+conditions <- expand.grid(
+    PEAKID = sort(unique(df_data$PEAKID)),
+    year_0 = sort(unique(df_data$year_0)),
+    TOTMEMBERS = median(df_data$TOTMEMBERS, na.rm = TRUE) # year trend at typical expedition size
+)
+rownames(conditions) <- NULL
+## Conditional mortality (given >0)
+# mortality_draws <- model_MTExped %>%
+#     add_epred_draws(newdata = conditions, re_formula = NULL) %>%
+#     rename(mort_rate = .epred)
+# # Probability of any mortality
+# hurdle_draws <- model_MTExped %>%
+#     add_epred_draws(newdata = conditions, dpar = "zoi", re_formula = NULL) %>%
+#     rename(prob_mort = zoi)
+
+draws <- model_MTExped %>%
+    add_epred_draws(newdata = conditions, re_formula = NULL, dpar = c("mu", "zoi", "coi")) %>%
+    ungroup() %>%
+    mutate(
+        prob_mort = 1 - zoi * (1 - coi), # P(at least one death)
+        mort_rate = .epred / prob_mort # E[mortality | at least one death]
+    )
+
+## Preparing Plotting Data and Colours ------------------------------------
+# MortDeathExped <- list(
+#     df = left_join(
+#         mortality_draws %>% select(PEAKID, year_0, TOTMEMBERS, .draw, mort_rate),
+#         hurdle_draws %>% select(PEAKID, year_0, TOTMEMBERS, .draw, prob_mort),
+#         by = c("PEAKID", "year_0", "TOTMEMBERS", ".draw")
+#     ),
+#     cols = c("#006D75", "#750800"),
+#     columns = c("mort_rate", "prob_mort"),
+#     names = c("Probability of Any Mortality [%]", "Conditional Mortality [%]")
+# )
+
+MortDeathExped <- list(
+    df = draws %>%
+        select(PEAKID, year_0, .draw, prob_mort, mort_rate) %>%
+        mutate(across(c(prob_mort, mort_rate), ~ .x * 100)),
+    cols = c("#006D75", "#750800"),
+    columns = c("prob_mort", "mort_rate"),
+    names = c("Probability of Any Mortality [%]", "Conditional Mortality [%]")
+)
+
+# MortDeathExped$df <- MortDeathExped$df %>%
+#     mutate(
+#         mort_rate = mort_rate * 100,
+#         prob_mort = prob_mort * 100
+#     )
+
+## Plotting ---------------------------------------------------------------
+Plots_Bayes_ExpedControl <- FUN.BayesianPlot(
+    plot_ls = MortDeathExped, ScaleFac = 0.7
+)
+# Plots_Bayes_ExpedControl$Main
+
 # MORTALITY BY CAUSE ======================================================
 ## Data -------------------------------------------------------------------
-d <- members_df %>%
+d <- df_members %>%
     mutate(
         DEATH     = as.logical(DEATH),
         MYEAR     = as.numeric(as.character(MYEAR)),
@@ -145,7 +243,7 @@ Plots_Cause <- ggplot(panel_a_data, aes(x = cause_label, y = DEATHHGTM)) +
 
 # AVALANCHE-MORTALITY BY ELEVATION AND SEASON =============================
 ## Data -------------------------------------------------------------------
-d <- members_df %>%
+d <- df_members %>%
     mutate(
         MYEAR     = as.numeric(as.character(MYEAR)),
         MSEASON   = as.numeric(as.character(MSEASON)),
@@ -253,7 +351,7 @@ Plots_Avalanche <- ggplot(d_plot, aes(x = decade_label, y = DEATHHGTM, fill = se
 # PLOT SAVING =============================================================
 ## Main Text --------------------------------------------------------------
 Main_gg <- plot_grid(
-    Plots_Bayes$Main,
+    Plots_Bayes_ExpedControl$Main, # Plots_Bayes_ExpedControl
     plot_grid(
         Plots_Cause,
         Plots_Avalanche,
@@ -271,7 +369,7 @@ ggsave(
 
 ## Supplement -------------------------------------------------------------
 ggsave(
-    FUN.BayesianPlot(plot_ls = MortDeath, ScaleFac = 3)$Supp,
+    FUN.BayesianPlot(plot_ls = MortDeathExped, ScaleFac = 0.75)$Supp,
     filename = file.path(Dir, "SUPP_Mortality_in_Himalayan_Mountaineering.png"),
     width = 21, height = 21, units = "cm", dpi = 600
 )

@@ -11,10 +11,11 @@
 
 # PREAMBLE ================================================================
 rm(list = ls()) # some may not like it, but it helps my workflow
+options(timeout = 600) # set timeout for downloading data and packages - my home internet connection is off-grid and so can drop at times, this fixes timeout issues
 
 ## Packages ---------------------------------------------------------------
 packages <- list(
-    core = c("readr", "dplyr", "tidyr", "terra", "sf", "sp"),
+    core = c("readr", "dplyr", "tidyr", "terra", "sf", "sp", "devtools", "foreign"),
     viz = c("ggplot2", "viridis", "cowplot", "mapview", "ggrepel", "tidyterra", "ggpubr", "grid", "png", "ggh4x"),
     spatial = c("rnaturalearth", "rnaturalearthdata"),
     stats = c("brms", "tidybayes", "broom", "changepoint", "lme4", "lmerTest"), # , "purr"
@@ -78,11 +79,19 @@ SubsetVariables_vec <- climate_vars$name[climate_vars$subset]
 PreColour <- "#AEC647"
 PostColour <- "#3F6B8F"
 
+### Death Types ------
+DEATHTYPE_LABELS <- c(
+    `4` = "Fall", `7` = "Avalanche", `6` = "Icefall/\nserac",
+    `8` = "Rockfall", `5` = "Crevasse"
+)
+CAUSE_ORDER <- c("Fall", "Avalanche", "Icefall/\nserac", "Rockfall", "Crevasse")
+
 # A. DATA LOADING =========================================================
 message("#### Loading Data from Disk ##################################")
 
 ## Expedition DATA -------------------------------------------------
 Expeditions_df <- read.csv(file.path(Dir.Data, "CleanedExpeditions.csv"))
+df_members <- read.dbf(file.path(Dir.Data,"members.DBF"))
 
 ## Summits as Spatial Objects --------------------------------------
 summits_df <- read_csv(file.path(Dir.Data, "selected_peaks_coordinates_counts.csv")) # load positions and names of summits
