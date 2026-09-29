@@ -48,11 +48,11 @@ Together, these results suggest that Himalayan mountaineering is becoming more e
 
 ### Data
 
-The `Data/` directory is not tracked through GitHub due to file size limitations. These files can be found at: 
+The `Data/` directory is not tracked through GitHub due to file size limitations. These files can be found at: https://doi.org/10.5281/zenodo.23042453
 
 ### Results and exports
 
-The `Exports/` directory contains fitted model objects, analysis-ready model data, peak-level time series, predictability estimates, and summaries from the climate, mortality, and crowding analyses. https://doi.org/10.5281/zenodo.23042453
+The `Exports/` directory contains fitted model objects, analysis-ready model data, peak-level time series, predictability estimates, and summaries from the climate, mortality, and crowding analyses.
 
 ## Citation
 
