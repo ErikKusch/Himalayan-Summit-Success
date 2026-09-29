@@ -30,21 +30,43 @@ Together, these results suggest that Himalayan mountaineering is becoming more e
 
 ### Analysis scripts
 
-- `Himalayan Summit Success - DATA.r`: data preparation and construction of the
-	analysis datasets.
-- `Mortality in Himalayan Mountaineering.r`: mortality and fatality analyses.
-- `Mountaineers Crowding the Himalaya.r`: expedition size, participation, and
-	crowding analyses.
-- `Gradual Changes in the Himalayan Seasons.r`: long-term seasonal climate
-	trends.
-- `Extreme Events in the Himalayan Seasons.r`: seasonal extreme-event and
-	predictability analyses.
-- `Objective hazards in Himalayan mountaineering exacerbated by climate change.r`:
-	climate-related objective-hazard analyses.
-- `ANALYSIS_MortalityandObjectiveHazards.r`: combined mortality and objective
-	hazard analysis.
-- `PlottingFunctions.r`: shared plotting functions.
-- `X - PersonalSettings.R`: local path and personal R settings.
+R scripts ---------
+
+Current analysis workflow
+
+- `Himalayan Summit Success - DATA.r`
+    Main data-preparation script. Loads expedition and peak data, loads or
+    downloads ERA5-Land rasters, selects eligible peaks, extracts hourly and
+    daily summit time series, calculates wind speed and seasonal percentile
+    bounds, flags extreme conditions, calculates predictability metrics, and
+    creates analysis-ready exports.
+
+- `Mortality in Himalayan Mountaineering.r`
+    Bayesian mortality analyses, including mortality trends, models controlling
+    for expedition size, mortality by cause and altitude, and avalanche mortality
+    summaries by season.
+
+- `Mountaineers Crowding the Himalaya.r`
+    Analyses of expedition counts, total mountaineer counts, expedition size,
+    summit-bid windows, and change points in seasonal expedition activity.
+
+- `Gradual Changes in the Himalayan Seasons.r`
+    Peak-level and overall trend analyses of mean seasonal climate conditions and
+    weather stability, represented by autocorrelation metrics.
+
+- `Extreme Events in the Himalayan Seasons.r`
+    Counts and run lengths of high and low seasonal extremes, with per-peak and
+    mixed-model trend summaries.
+
+- `Objective hazards in Himalayan mountaineering exacerbated by climate change.r`
+    Seasonal analyses of storms, avalanches, deaths, avalanche-to-storm ratios,
+    and avalanche-death altitude differences.
+
+- `PlottingFunctions.r`
+    Shared plotting functions, including Bayesian uncertainty ribbon plots used
+    by the mortality and crowding analyses.
+
+The file `X - PersonalSettings.R` is intentionally excluded from this deposit. It contains local settings and may contain climate-data-store credentials.
 
 ### Data
 
